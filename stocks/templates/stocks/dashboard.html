@@ -1,0 +1,918 @@
+{% load l10n %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock Screener Dashboard</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --surface: #ffffff; --surface-2: #f0f2f5; --border: #e1e4e8;
+    --text: #1d2129; --muted: #677080; --accent: #2f6fde; --accent-text: #ffffff;
+    --ok: #1a8f4c; --ok-bg: #e6f5ec; --err: #c4352b; --err-bg: #fbeae8; --warn-bg: #fff6df;
+    --radius: 10px; --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --surface: #1a1e24; --surface-2: #232830; --border: #2e343d;
+      --text: #e6e9ee; --muted: #9aa3b0; --accent: #5b8ff0; --accent-text: #0b0e12;
+      --ok: #4cc283; --ok-bg: #16301f; --err: #f07a70; --err-bg: #3a1d1b; --warn-bg: #352d16;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: center;
+  }
+  header h1 { font-size: 18px; margin: 0; flex: 1 1 auto; }
+  a { color: var(--accent); }
+  .stat { display: flex; flex-direction: column; }
+  .stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  main { max-width: 1400px; margin: 0 auto; padding: 24px; display: grid; gap: 24px;
+         grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .card + .card { margin-top: 16px; }
+  h2 { font-size: 15px; margin: 0 0 4px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  .step { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+          background: var(--surface-2); font-size: 12px; margin-right: 6px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; text-transform: capitalize; }
+  input, select {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); color: var(--text); font: inherit;
+  }
+  .row { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
+  .params { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin-bottom: 14px; }
+  button {
+    border: 0; border-radius: 6px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer;
+    background: var(--accent); color: var(--accent-text);
+  }
+  button.secondary { background: var(--surface-2); color: var(--text); font-weight: 500; }
+  button:disabled { opacity: .55; cursor: progress; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .status { font-size: 13px; color: var(--muted); }
+  .result { margin-top: 12px; padding: 10px 12px; border-radius: 6px; font-size: 13px; white-space: pre-wrap;
+            font-family: var(--mono); word-break: break-word; }
+  .result.ok { background: var(--ok-bg); color: var(--ok); }
+  .result.err { background: var(--err-bg); color: var(--err); }
+  .result:empty { display: none; }
+  .progress { margin-top: 14px; }
+  .bar { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s ease; }
+  .counters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 4px; }
+  .counters b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .counters span { color: var(--muted); font-size: 12px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: -4px -18px 16px; padding: 0 18px; overflow-x: auto; }
+  .tab { background: none; color: var(--muted); border-radius: 0; padding: 10px 12px; font-weight: 500;
+         border-bottom: 2px solid transparent; white-space: nowrap; }
+  .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  .panel[hidden] { display: none; }
+  .warn { background: var(--warn-bg); border-radius: 6px; padding: 8px 10px; font-size: 13px; margin-bottom: 12px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 18px 0 10px; }
+  .toolbar input { width: 220px; }
+  .toolbar .status { flex: 1; }
+  .table-wrap { overflow: auto; max-height: 65vh; border: 1px solid var(--border); border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--surface-2); cursor: pointer; user-select: none; font-weight: 600; }
+  th[data-dir="asc"]::after { content: " ▲"; font-size: 10px; }
+  th[data-dir="desc"]::after { content: " ▼"; font-size: 10px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: var(--surface-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { background: var(--surface-2); border-radius: 999px; padding: 3px 10px; font-size: 13px; font-family: var(--mono); }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+             border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; }
+  .wide { grid-column: 1 / -1; }
+  .market { margin-top: 18px; padding: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+  .market h3 { margin: 0 0 6px; font-size: 14px; }
+  .market p { margin: 0 0 10px; font-size: 13px; }
+  .market ul { margin: 0; padding-left: 18px; font-size: 13px; }
+  .market li { margin-bottom: 4px; }
+  .badge.buy, .badge.bullish { background: var(--ok-bg); color: var(--ok); }
+  .badge.avoid, .badge.bearish { background: var(--err-bg); color: var(--err); }
+  .badge.watch, .badge.mixed { background: var(--warn-bg); color: var(--text); }
+  .rec { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 14px; }
+  .rec-head { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; margin-bottom: 10px; }
+  .rec-head h3 { margin: 0; font-size: 18px; }
+  .rec-head .rank { color: var(--muted); font-size: 13px; }
+  .levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-bottom: 10px; }
+  .levels div { background: var(--surface-2); border-radius: 6px; padding: 6px 10px; }
+  .levels b { display: block; font-variant-numeric: tabular-nums; }
+  .levels span { color: var(--muted); font-size: 12px; }
+  .rec ul { margin: 4px 0 8px; padding-left: 18px; font-size: 13px; }
+  .rec li { margin-bottom: 4px; }
+  .rec h4 { margin: 8px 0 2px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  td.wrap { white-space: normal; min-width: 260px; max-width: 420px; }
+  label.check { display: flex; gap: 6px; align-items: center; margin: 0; font-size: 13px; color: var(--text); text-transform: none; }
+  label.check input { width: auto; }
+  .verify-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 16px;
+                padding-top: 14px; border-top: 1px solid var(--border); }
+  .verify-row input { width: 160px; }
+  button.small { padding: 3px 9px; font-size: 12px; }
+  .badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600;
+           background: var(--surface-2); color: var(--muted); }
+  .badge.target_hit { background: var(--ok-bg); color: var(--ok); }
+  .badge.stop_hit { background: var(--err-bg); color: var(--err); }
+  .pos { color: var(--ok); }
+  .neg { color: var(--err); }
+  .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 14px 0; }
+  .summary:empty { display: none; }
+  .summary div { background: var(--surface-2); border-radius: 6px; padding: 8px 10px; }
+  .summary b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .summary span { color: var(--muted); font-size: 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Stock Screener</h1>
+  <div class="stat"><b>{{ stats.instruments|floatformat:"0g" }}</b><span>instruments</span></div>
+  <div class="stat"><b>~{{ stats.candles_estimate|floatformat:"0g" }}</b><span>daily candles</span></div>
+  <div class="stat"><b>{{ stats.latest_candle|date:"d M Y"|default:"—" }}</b><span>latest candle</span></div>
+  <div class="stat" id="hdr-fetch"><b id="hdr-fetch-value">—</b><span id="hdr-fetch-label">no fetch yet</span></div>
+  <a href="{% url 'index' %}" class="status">API endpoints →</a>
+</header>
+
+<main>
+  <!-- Data pipeline -->
+  <section>
+    <div class="card">
+      <h2><span class="step">1</span>Sync instruments</h2>
+      <p class="hint">Download the Angel One scrip master and store new instruments.</p>
+      <div class="actions">
+        <button data-job="sync">Sync instruments</button>
+        <span class="status" data-status="sync"></span>
+      </div>
+      <div class="result" data-result="sync"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">2</span>Fetch historic candles</h2>
+      <p class="hint">Fetches daily candles for every BSE/NSE instrument into a CSV. This takes a long time (about 1 s per instrument).</p>
+      <div class="row">
+        <div><label for="start_date">Start</label><input type="datetime-local" id="start_date"></div>
+        <div><label for="end_date">End</label><input type="datetime-local" id="end_date"></div>
+      </div>
+      <div class="actions">
+        <button id="fetch-start">Fetch candles</button>
+        <button id="fetch-cancel" class="secondary" hidden>Stop</button>
+        <span class="status" data-status="fetch"></span>
+      </div>
+      <div class="progress" id="fetch-progress">
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="fetch-bar"></span></div>
+        <div class="counters">
+          <div><b id="fp-processed">0</b><span>of <span id="fp-total">{{ stats.fetchable|floatformat:"0g" }}</span></span></div>
+          <div><b id="fp-fetched">0</b><span>fetched</span></div>
+          <div><b id="fp-failed">0</b><span>no data</span></div>
+          <div><b id="fp-rows">0</b><span>candles</span></div>
+        </div>
+        <div class="status" id="fp-time">No fetch yet. {{ stats.fetchable|floatformat:"0g" }} BSE/NSE instruments will be fetched.</div>
+      </div>
+      <div class="result" data-result="fetch"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">3</span>Import CSV into database</h2>
+      <p class="hint">Bulk insert a fetched CSV into <code>historicstocks</code>. Importing the same file twice inserts duplicate rows.</p>
+      <div style="margin-bottom:12px">
+        <label for="csv_file">CSV file</label>
+        <select id="csv_file">
+          {% for f in csv_files %}
+            <option value="{{ f.name }}">{{ f.name }} ({{ f.size_mb|unlocalize }} MB, {{ f.modified|date:"d M H:i" }})</option>
+          {% empty %}
+            <option value="">No fetched CSVs in data/</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="actions">
+        <button data-job="insert">Import CSV</button>
+        <span class="status" data-status="insert"></span>
+      </div>
+      <div class="result" data-result="insert"></div>
+    </div>
+  </section>
+
+  <!-- Screeners -->
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="recommend" aria-selected="true">Recommendation</button>
+      <button class="tab" role="tab" data-tab="signals" aria-selected="false">Buy signals</button>
+      <button class="tab" role="tab" data-tab="news" aria-selected="false">News</button>
+      {% for s in screeners %}
+        <button class="tab" role="tab" data-tab="{{ s.id }}" aria-selected="false">{{ s.title }}</button>
+      {% endfor %}
+      <button class="tab" role="tab" data-tab="engulfing" aria-selected="false">Engulfing symbols</button>
+    </div>
+
+    <div class="panel" data-panel="recommend">
+      <p class="hint">Which stocks to buy today, and why. Stocks are ranked only by the techniques that beat the market in the backtest of your stored candles.</p>
+      <div class="params">
+        <div><label for="rec-count">How many</label><input type="number" id="rec-count" value="3" min="1" max="20" step="1"></div>
+        <div><label for="rec-date">As of date (optional)</label><input type="date" id="rec-date" title="Empty = latest candle. A past date shows what was recommended then and what happened next."></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="rec-run">Recommend stocks</button>
+        <button type="button" class="secondary" id="rec-save">Save for verification</button>
+        <label class="check"><input type="checkbox" id="rec-news"> Also check news (Claude, ~1 min)</label>
+        <span class="status" id="rec-status"></span>
+      </div>
+      <div class="result" id="rec-save-result"></div>
+      <div id="rec-output"></div>
+
+      <h2 style="margin-top:22px">Saved recommendations</h2>
+      <p class="hint">Recommendations you saved, by date. <b>Verify</b> checks them against the newest candles: did each reach its target or stop loss, and on which date.</p>
+      <div id="rec-dates"></div>
+      <div class="toolbar"><span class="status" id="rec-saved-caption"></span></div>
+      <div id="rec-saved"></div>
+    </div>
+
+    <form class="panel" data-panel="signals" hidden data-url-template="{{ signals.url_template }}">
+      <div style="margin-bottom:12px">
+        <label for="technique">Technique</label>
+        <select id="technique" name="technique">
+          {% for t in signals.techniques %}
+            <option value="{{ t.value }}" data-description="{{ t.description }}">{{ t.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <p class="hint" id="technique-description">{{ signals.techniques.0.description }}</p>
+      <div class="params">
+        {% for f in signals.fields %}
+          <div>
+            <label for="signals-{{ f.name }}">{{ f.label }}</label>
+            <input type="{{ f.type }}" id="signals-{{ f.name }}" name="{{ f.name }}" value="{{ f.default|unlocalize }}"
+                   {% if f.hint %}title="{{ f.hint }}" {% endif %}{% if f.step %}step="{{ f.step }}"{% endif %}{% if f.min is not None %} min="{{ f.min|unlocalize }}"{% endif %}{% if f.max is not None %} max="{{ f.max|unlocalize }}"{% endif %}>
+          </div>
+        {% endfor %}
+      </div>
+      <p class="hint">Liquidity filter: min avg turnover is the 20-day average of close × volume in ₹ (5,000,000 = ₹50 lakh/day). Stop loss and target are close ∓ 2 / + 3 × ATR(14). These are mechanical technical screens, not investment advice.</p>
+      <p class="hint"><b>Predict as of</b>: pick a past date (e.g. 5 Oct) to run the technique using only the candles up to that day. Each pick then shows whether it reached its target or stop loss in the candles after that date, and on which date. Leave it empty for today's picks.</p>
+      <div class="actions">
+        <button type="submit">Find stocks</button>
+        <button type="reset" class="secondary">Reset defaults</button>
+      </div>
+    </form>
+
+    {% for s in screeners %}
+      <form class="panel" data-panel="{{ s.id }}" data-url="{{ s.url }}" hidden>
+        <p class="hint">{{ s.description }}</p>
+        <div class="params">
+          {% for f in s.fields %}
+            <div>
+              <label for="{{ s.id }}-{{ f.name }}">{{ f.label }}</label>
+              <input type="{{ f.type }}" id="{{ s.id }}-{{ f.name }}" name="{{ f.name }}" value="{{ f.default|unlocalize }}"
+                     {% if f.step %}step="{{ f.step }}"{% endif %}{% if f.min is not None %} min="{{ f.min|unlocalize }}"{% endif %}{% if f.max is not None %} max="{{ f.max|unlocalize }}"{% endif %}>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="actions">
+          <button type="submit">Run screener</button>
+          <button type="reset" class="secondary">Reset defaults</button>
+        </div>
+      </form>
+    {% endfor %}
+
+    <form class="panel" data-panel="news" data-url="{{ urls.news }}" hidden>
+      <p class="hint">Reads world news (markets, Fed, crude, rupee, China, trade) and each stock's recent headlines from Google News, and has Claude score the news from −1 (bearish) to +1 (bullish).
+        <b>Buy</b> = technical signal and news ≥ +0.2 · <b>Avoid</b> = news ≤ −0.3, whatever the chart says · <b>Watch</b> = the rest.</p>
+      <div class="params">
+        <div>
+          <label for="news-technique">Stocks from</label>
+          <select id="news-technique" name="technique">
+            {% for t in signals.techniques %}<option value="{{ t.value }}">{{ t.title }}</option>{% endfor %}
+          </select>
+        </div>
+        <div><label for="news-limit">How many</label><input type="number" id="news-limit" name="limit" value="15" min="1" max="30" step="1"></div>
+        <div style="grid-column: span 2"><label for="news-symbols">Or these symbols</label>
+          <input id="news-symbols" name="symbols" placeholder="e.g. TCS, INFY, RELIANCE (overrides the technique)"></div>
+      </div>
+      <div class="actions">
+        <button type="submit">Analyse news</button>
+        <label class="check"><input type="checkbox" name="refresh"> Fetch fresh news (results are cached for an hour)</label>
+      </div>
+      <p class="hint" style="margin-top:10px">Takes about 30–60 s and makes one Claude API call. Headlines can be wrong or out of context; this is not investment advice.</p>
+    </form>
+
+    <div class="panel" data-panel="engulfing" hidden>
+      <p class="hint">Symbols whose last two stored candles form a bullish engulfing pattern.</p>
+      <div class="actions"><button data-run-engulfing>Find symbols</button></div>
+    </div>
+
+    <div id="news-market"></div>
+    <div class="toolbar">
+      <span class="status" id="screen-status">Run a screener to see results.</span>
+      <input type="search" id="filter" placeholder="Filter by symbol…" aria-label="Filter by symbol">
+      <button class="secondary" id="download" disabled>Download CSV</button>
+    </div>
+    <div id="results"></div>
+  </section>
+</main>
+
+{{ urls|json_script:"api-urls" }}
+<script>
+(() => {
+  const URLS = JSON.parse(document.getElementById("api-urls").textContent);
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+  // ---------- helpers ----------
+  async function callApi(url, { method = "GET", body } = {}) {
+    const res = await fetch(url, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data;
+    try { data = await res.json(); } catch { data = { error: `HTTP ${res.status}` }; }
+    if (!res.ok) throw new Error(formatError(data));
+    return data;
+  }
+
+  function formatError(data) {
+    if (data.error) return data.error;
+    if (data.detail) return data.detail;
+    return Object.entries(data).map(([k, v]) => `${k}: ${[].concat(v).join(", ")}`).join("\n");
+  }
+
+  function startTimer(el, label) {
+    const t0 = Date.now();
+    const tick = () => { el.innerHTML = `<span class="spinner"></span> ${label} ${Math.round((Date.now() - t0) / 1000)}s`; };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => { clearInterval(id); return ((Date.now() - t0) / 1000).toFixed(1); };
+  }
+
+  const toLocalInput = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const toSmartApi = v => v.replace("T", " ");
+
+  // ---------- data pipeline jobs ----------
+  const end = new Date();
+  const start = new Date(end.getTime() - 30 * 86400000);
+  start.setHours(9, 15, 0, 0);
+  $("#start_date").value = toLocalInput(start);
+  $("#end_date").value = toLocalInput(end);
+
+  const jobs = {
+    sync: () => callApi(URLS.sync, { method: "POST" }),
+    insert: () => {
+      const csv = $("#csv_file").value;
+      return callApi(URLS.insert, { method: "POST", body: csv ? { csv_file: csv } : {} });
+    },
+  };
+
+  const confirmText = {
+    insert: "Insert this CSV into historicstocks? Importing the same file twice creates duplicate rows.",
+  };
+
+  $$("[data-job]").forEach(btn => btn.addEventListener("click", async () => {
+    const job = btn.dataset.job;
+    if (confirmText[job] && !confirm(confirmText[job])) return;
+    const status = $(`[data-status="${job}"]`);
+    const result = $(`[data-result="${job}"]`);
+    btn.disabled = true;
+    result.textContent = "";
+    result.className = "result";
+    const stop = startTimer(status, "Running…");
+    try {
+      const data = await jobs[job]();
+      result.classList.add("ok");
+      result.textContent = Object.entries(data).map(([k, v]) => `${k}: ${v}`).join("\n");
+      status.textContent = `Done in ${stop()}s`;
+    } catch (e) {
+      result.classList.add("err");
+      result.textContent = e.message;
+      status.textContent = `Failed after ${stop()}s`;
+    } finally {
+      btn.disabled = false;
+    }
+  }));
+
+  // ---------- historic fetch: runs in the background, progress is polled ----------
+  const fetchBtn = $("#fetch-start");
+  const cancelBtn = $("#fetch-cancel");
+  const fetchStatus = $('[data-status="fetch"]');
+  const fetchResult = $('[data-result="fetch"]');
+  let pollTimer = null;
+  let stopping = false;
+
+  const fmtNum = n => Number(n || 0).toLocaleString();
+  const fmtDuration = secs => {
+    const s = Math.max(0, Math.round(secs || 0));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return h ? `${h}h ${m}m` : m ? `${m}m ${r}s` : `${r}s`;
+  };
+
+  function showProgress(p) {
+    $("#fetch-progress").hidden = false;
+    $("#fetch-bar").style.width = `${p.percent || 0}%`;
+    $(".bar", $("#fetch-progress")).setAttribute("aria-valuenow", p.percent || 0);
+    $("#fp-processed").textContent = fmtNum(p.processed);
+    $("#fp-total").textContent = fmtNum(p.total);
+    $("#fp-fetched").textContent = fmtNum(p.fetched);
+    $("#fp-failed").textContent = fmtNum(p.failed);
+    $("#fp-rows").textContent = fmtNum(p.rows);
+    let time = `${p.percent || 0}% · ${fmtDuration(p.elapsed_seconds)} elapsed`;
+    if (p.per_second) time += ` · ${p.per_second} instruments/s`;
+    if (p.eta_seconds !== null && p.eta_seconds !== undefined) time += ` · about ${fmtDuration(p.eta_seconds)} left`;
+    $("#fp-time").textContent = time;
+    updateHeader(p);
+  }
+
+  function updateHeader(p) {
+    const value = $("#hdr-fetch-value");
+    const label = $("#hdr-fetch-label");
+    if (p.status === "running") {
+      value.textContent = `${fmtNum(p.processed)} / ${fmtNum(p.total)}`;
+      label.textContent = `fetching · ${fmtNum(p.rows)} candles · ${p.percent || 0}%`;
+      return;
+    }
+    const when = p.finished_at
+      ? new Date(p.finished_at * 1000).toLocaleString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+      : "";
+    value.textContent = `${fmtNum(p.rows)} candles`;
+    label.textContent = `last fetch ${p.status} · ${fmtNum(p.fetched)} instruments${when ? ` · ${when}` : ""}`;
+  }
+
+  function showRunning() {
+    fetchBtn.disabled = true;
+    cancelBtn.hidden = false;
+    fetchStatus.innerHTML = `<span class="spinner"></span> ${stopping ? "Stopping…" : "Fetching…"}`;
+  }
+
+  function showFinished(p) {
+    stopPolling();
+    stopping = false;
+    fetchBtn.disabled = false;
+    cancelBtn.hidden = true;
+    const s = p.summary || {};
+    const lines = [];
+    if (p.status === "completed") lines.push("Fetch completed.");
+    else if (p.status === "cancelled") lines.push("Fetch stopped by you.");
+    else if (p.status === "stopped") lines.push(`Fetch stopped. ${p.error}`);
+    else lines.push(`Fetch failed: ${p.error}`);
+    if (s.csv_file) lines.push(`Saved ${fmtNum(s.rows)} candles from ${fmtNum(s.fetched)} instruments to ${s.csv_file}.`);
+    else if (p.status !== "error") lines.push("Nothing was saved.");
+    if (s.failed) lines.push(`${fmtNum(s.failed)} instruments returned no data (listed in ${s.failed_csv_file}).`);
+    if (s.not_attempted) lines.push(`${fmtNum(s.not_attempted)} instruments were not fetched.`);
+    fetchResult.className = `result ${p.status === "completed" ? "ok" : "err"}`;
+    fetchResult.textContent = lines.join("\n");
+    fetchStatus.textContent = `${p.status[0].toUpperCase()}${p.status.slice(1)} after ${fmtDuration(p.elapsed_seconds)}`;
+    if (s.csv_file) addCsvOption(s.csv_file);
+  }
+
+  async function pollProgress() {
+    try {
+      const p = await callApi(URLS.fetchProgress);
+      if (p.status === "idle") { stopPolling(); return; }
+      showProgress(p);
+      if (p.status === "running") { showRunning(); startPolling(); }
+      else showFinished(p);
+    } catch (e) {
+      fetchStatus.textContent = `Can't reach the server (${e.message}); retrying…`;
+    }
+  }
+
+  function startPolling() {
+    if (!pollTimer) pollTimer = setInterval(pollProgress, 1000);
+  }
+
+  function stopPolling() {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  fetchBtn.addEventListener("click", async () => {
+    if (!confirm("Fetching candles for every instrument can take over an hour. Start now?")) return;
+    fetchBtn.disabled = true;
+    fetchResult.textContent = "";
+    fetchResult.className = "result";
+    fetchStatus.innerHTML = `<span class="spinner"></span> Starting…`;
+    try {
+      const p = await callApi(URLS.fetch, { method: "POST", body: {
+        start_date: toSmartApi($("#start_date").value),
+        end_date: toSmartApi($("#end_date").value),
+      }});
+      showProgress(p);
+      showRunning();
+      startPolling();
+    } catch (e) {
+      fetchResult.className = "result err";
+      fetchResult.textContent = e.message;
+      fetchStatus.textContent = "Not started";
+      fetchBtn.disabled = false;
+      pollProgress();  // e.g. a fetch was already running: show its progress
+    }
+  });
+
+  cancelBtn.addEventListener("click", async () => {
+    cancelBtn.disabled = true;
+    try {
+      await callApi(URLS.fetchCancel, { method: "POST" });
+      stopping = true;
+      showRunning();
+    } catch (e) {
+      fetchStatus.textContent = e.message;
+    } finally {
+      cancelBtn.disabled = false;
+    }
+  });
+
+  pollProgress();  // resume showing a fetch that is running (or just finished) after a page reload
+
+  function addCsvOption(name) {
+    const select = $("#csv_file");
+    if ($$("option", select).some(o => o.value === name)) return;
+    $$("option", select).filter(o => !o.value).forEach(o => o.remove());
+    const opt = new Option(`${name} (new)`, name, true, true);
+    select.prepend(opt);
+  }
+
+  // ---------- tabs ----------
+  $$(".tab").forEach(tab => tab.addEventListener("click", () => {
+    $$(".tab").forEach(t => t.setAttribute("aria-selected", t === tab));
+    $$(".panel").forEach(p => { p.hidden = p.dataset.panel !== tab.dataset.tab; });
+  }));
+
+  // ---------- screeners ----------
+  const resultsEl = $("#results");
+  const screenStatus = $("#screen-status");
+  const filterEl = $("#filter");
+  const downloadBtn = $("#download");
+  let rows = [];
+  let columns = [];
+  let sort = { key: null, dir: 1 };
+  let lastName = "results";
+
+  async function runScreener(url, name, submitBtn, options = {}) {
+    submitBtn.disabled = true;
+    resultsEl.innerHTML = "";
+    $("#news-market").innerHTML = "";
+    downloadBtn.disabled = true;
+    const stop = startTimer(screenStatus, "Scanning…");
+    try {
+      const data = await callApi(url, options);
+      lastName = name;
+      if (Array.isArray(data)) {
+        rows = data.map(symbol => ({ symbol }));
+        columns = ["symbol"];
+        screenStatus.textContent = `${rows.length} symbols in ${stop()}s`;
+      } else if (Array.isArray(data.results)) {
+        rows = data.results;
+        columns = rows.length ? Object.keys(rows[0]) : [];
+        const shown = rows.length < data.count ? ` (showing ${rows.length})` : "";
+        screenStatus.textContent = `${data.count} of ${data.universe} liquid stocks match${shown} · data as of ${data.as_of} · ${stop()}s`;
+        if (data.market) {
+          renderMarket(data);
+          const n = v => rows.filter(r => r.verdict === v).length;
+          screenStatus.textContent = `${n("buy")} buy · ${n("watch")} watch · ${n("avoid")} avoid of ${rows.length} stocks` +
+            ` · ${data.world_headlines.length} world headlines · ${data.cached ? "cached result" : `${data.usage.input_tokens + data.usage.output_tokens} tokens`}` +
+            ` · ${stop()}s` + (data.not_found.length ? ` · not found: ${data.not_found.join(", ")}` : "");
+        }
+        const o = data.outcome_summary;
+        if (o) {
+          screenStatus.textContent += ` · after ${data.as_of}: ${o.target_hit} reached target, ${o.stop_hit} hit stop loss, ` +
+            `${o.open} still open` + (o.no_later_data ? `, ${o.no_later_data} no later candles` : "") +
+            (o.hit_rate_pct !== null ? ` · hit rate ${o.hit_rate_pct}%` : "") +
+            (o.avg_trading_days_to_target !== null ? ` · avg ${o.avg_trading_days_to_target} trading days to target` : "") +
+            (o.checked_through ? ` · checked through ${o.checked_through}` : "");
+        }
+      } else {
+        rows = Object.values(data).flat();
+        columns = rows.length ? Object.keys(rows[0]) : [];
+        screenStatus.textContent = `${rows.length} zones across ${Object.keys(data).length} symbols in ${stop()}s`;
+      }
+      sort = { key: null, dir: 1 };
+      render();
+    } catch (e) {
+      stop();
+      rows = [];
+      screenStatus.textContent = "Failed";
+      resultsEl.innerHTML = `<div class="result err"></div>`;
+      $(".result", resultsEl).textContent = e.message;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  }
+
+  $$("form.panel").forEach(form => form.addEventListener("submit", e => {
+    e.preventDefault();
+    const params = new URLSearchParams([...new FormData(form)].filter(([, v]) => v !== ""));
+    let url = form.dataset.url;
+    let name = $(`.tab[data-tab="${form.dataset.panel}"]`).textContent.trim();
+    if (form.dataset.urlTemplate) {
+      const technique = params.get("technique");
+      params.delete("technique");
+      url = form.dataset.urlTemplate.replace("__technique__", technique);
+      name = technique;
+    }
+    runScreener(`${url}?${params}`, name, $("button[type=submit]", form));
+  }));
+
+  // Technique picker: show its description; min signals only applies to top picks.
+  const techniqueSelect = $("#technique");
+  const syncTechnique = () => {
+    const opt = techniqueSelect.selectedOptions[0];
+    $("#technique-description").textContent = opt.dataset.description;
+    const minSignals = $("#signals-min_signals");
+    if (minSignals) minSignals.disabled = techniqueSelect.value !== "top-picks";
+  };
+  techniqueSelect.addEventListener("change", syncTechnique);
+  techniqueSelect.form.addEventListener("reset", () => setTimeout(syncTechnique));
+  syncTechnique();
+
+  $("[data-run-engulfing]").addEventListener("click", e =>
+    runScreener(URLS.engulfing, "Engulfing symbols", e.currentTarget));
+
+  function renderMarket(data) {
+    const m = data.market || {};
+    const mood = Number(m.mood || 0);
+    const moodText = mood >= 0.2 ? "bullish" : mood <= -0.2 ? "bearish" : "mixed";
+    const themes = (m.themes || []).map(t => {
+      const src = t.source ? ` <a href="${escapeHtml(t.source.link)}" target="_blank" rel="noopener">${escapeHtml(t.source.source || "source")}</a>` : "";
+      return `<li><span class="badge ${escapeHtml(t.impact)}">${escapeHtml(t.impact)}</span> ${escapeHtml(t.theme)}` +
+        (t.sectors.length ? ` → <b>${escapeHtml(t.sectors.join(", "))}</b>` : "") + src + "</li>";
+    }).join("");
+    $("#news-market").innerHTML = `<div class="market">
+      <h3>World news mood: <span class="badge ${moodText}">${moodText} ${mood > 0 ? "+" : ""}${mood.toFixed(2)}</span></h3>
+      <p>${escapeHtml(m.summary || "")}</p>
+      ${themes ? `<ul>${themes}</ul>` : ""}
+    </div>`;
+  }
+
+  // ---------- recommendation ----------
+  function recParams() {
+    const params = { count: $("#rec-count").value };
+    if ($("#rec-date").value) params.as_of = $("#rec-date").value;
+    if ($("#rec-news").checked) params.news = "true";
+    return params;
+  }
+
+  $("#rec-save").addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    const res = $("#rec-save-result");
+    btn.disabled = true;
+    const stop = startTimer($("#rec-status"), "Saving…");
+    try {
+      const data = await callApi(URLS.recommendSave, { method: "POST", body: recParams() });
+      $("#rec-status").textContent = `Done in ${stop()}s`;
+      $("#rec-output").innerHTML = renderRecommendation(data);
+      res.className = "result ok";
+      res.textContent = data.recommendations.length
+        ? `Saved ${data.saved} recommendation(s) for ${data.signal_date}` + (data.already_saved ? ` (${data.already_saved} were already saved)` : "") +
+          ". Use Verify below after new candles are imported."
+        : `Nothing to save: ${data.message}`;
+      loadRecDates();
+    } catch (err) {
+      stop();
+      $("#rec-status").textContent = "";
+      res.className = "result err";
+      res.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $("#rec-run").addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    const out = $("#rec-output");
+    btn.disabled = true;
+    out.innerHTML = "";
+    $("#rec-save-result").className = "result";
+    $("#rec-save-result").textContent = "";
+    const stop = startTimer($("#rec-status"), "Analysing…");
+    try {
+      const data = await callApi(`${URLS.recommend}?${new URLSearchParams(recParams())}`);
+      $("#rec-status").textContent = `${data.candidates} of ${data.universe} liquid stocks have a proven signal · data as of ${data.as_of} · ${stop()}s`;
+      out.innerHTML = renderRecommendation(data);
+    } catch (err) {
+      stop();
+      $("#rec-status").textContent = "";
+      out.innerHTML = `<div class="result err"></div>`;
+      $(".result", out).textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function renderRecommendation(data) {
+    const li = items => items.map(t => `<li>${escapeHtml(t)}</li>`).join("");
+    const proven = data.proven_techniques.map(t => t.title).join(", ") || "none";
+    let html = `<p class="hint" style="margin-top:12px">${escapeHtml(data.method)} Proven: <b>${escapeHtml(proven)}</b>` +
+      (data.backtest_period ? ` (backtest ${data.backtest_period.from} to ${data.backtest_period.to}).` : ".") + `</p>`;
+    if (data.lookahead_warning) html += `<div class="warn">${escapeHtml(data.lookahead_warning)}</div>`;
+    const os = data.outcome_summary;
+    if (os && os.no_later_data < data.recommendations.length) {
+      html += `<div class="warn">What happened after ${escapeHtml(data.as_of)}: <b>${os.target_hit} reached target</b>, ` +
+        `${os.stop_hit} hit stop loss first, ${os.open} still open${os.no_later_data ? `, ${os.no_later_data} without later candles` : ""}.</div>`;
+    }
+    if (data.news && data.news.dropped_for_bad_news.length) {
+      html += `<div class="warn">Dropped for bad news: ${escapeHtml(data.news.dropped_for_bad_news.join(", "))}</div>`;
+    }
+    if (!data.recommendations.length) {
+      return html + `<div class="empty">${escapeHtml(data.message)}</div>`;
+    }
+    html += data.recommendations.map(r => `<div class="rec">
+      <div class="rec-head">
+        <span class="badge buy">${r.action}</span>
+        <h3><a href="${URLS.stock.replace("__symbol__", encodeURIComponent(r.symbol))}" target="_blank" rel="noopener">${escapeHtml(r.symbol)}</a></h3>
+        <span class="rank">#${r.rank} · ${escapeHtml(r.exchange)} · score ${r.score}</span>
+      </div>
+      <div class="levels">
+        <div><b>${fmtNum2(r.buy_price)}</b><span>buy around</span></div>
+        <div><b class="pos">${fmtNum2(r.target)} (+${r.target_pct}%)</b><span>target</span></div>
+        <div><b class="neg">${fmtNum2(r.stop_loss)} (${r.stop_loss_pct}%)</b><span>stop loss</span></div>
+        <div><b>${r.reward_to_risk ?? "—"}</b><span>reward : risk</span></div>
+        <div><b>${r.expected_days_to_target ? `~${r.expected_days_to_target} sessions` : "—"}</b><span>typical time to target</span></div>
+      </div>
+      ${r.outcome ? renderOutcome(r, data.as_of) : ""}
+      <h4>Why</h4><ul>${li(r.why)}</ul>
+      <h4>Risks</h4><ul>${li(r.risks)}</ul>
+      ${r.other_signals.length ? `<p class="hint">Other signals (no proven edge): ${escapeHtml(r.other_signals.join(", "))}</p>` : ""}
+    </div>`).join("");
+    return html + `<p class="hint" style="margin-top:12px">${escapeHtml(data.disclaimer)}</p>`;
+  }
+
+  function renderOutcome(r, asOf) {
+    const o = r.outcome;
+    if (r.target_hit === null) {
+      return `<div class="levels"><div><b>Waiting</b><span>target hit? No candles after ${escapeHtml(asOf)} yet: import newer data, then check again</span></div></div>`;
+    }
+    const target = r.target_hit
+      ? `<b class="pos">Yes · ${escapeHtml(r.target_hit_date)}</b><span>target hit, after ${o.trading_days_to_target} trading days (${o.calendar_days_to_target} calendar days)</span>`
+      : `<b>Not yet</b><span>target hit? checked through ${escapeHtml(o.checked_through)}</span>`;
+    const stop = r.stop_loss_hit
+      ? `<b class="neg">Yes · ${escapeHtml(r.stop_loss_hit_date)}</b><span>stop loss hit, after ${o.trading_days_to_stop} trading days</span>`
+      : `<b>No</b><span>stop loss hit?</span>`;
+    const first = { target_hit: ["target_hit", "Target came first"], stop_hit: ["stop_hit", "Stop loss came first"],
+                    open: ["", "Still open"] }[o.outcome];
+    return `<p style="margin:0 0 6px"><span class="badge ${first[0]}">${first[1]}</span>
+        <span class="status">return to last close ${o.return_pct > 0 ? "+" : ""}${o.return_pct}% · best gain ${o.max_gain_pct > 0 ? "+" : ""}${o.max_gain_pct}%</span></p>
+      <div class="levels"><div>${target}</div><div>${stop}</div></div>`;
+  }
+
+  // Saved recommendations, by date
+  const REC = "recommendation";
+  const STATUS_TEXT = { open: "Open", target_hit: "Target hit", stop_hit: "Stop loss hit" };
+  const pctSpan = v => v === null || v === undefined ? "" : ` <span class="${v >= 0 ? "pos" : "neg"}">${v > 0 ? "+" : ""}${v.toFixed(2)}%</span>`;
+
+  async function loadRecDates() {
+    const el = $("#rec-dates");
+    let dates;
+    try {
+      dates = await callApi(`${URLS.trackedDates}?technique=${REC}`);
+    } catch (e) {
+      el.innerHTML = `<div class="result err"></div>`;
+      $(".result", el).textContent = e.message;
+      return;
+    }
+    if (!dates.length) {
+      el.innerHTML = `<div class="empty">Nothing saved yet. Click "Save for verification" above.</div>`;
+      return;
+    }
+    el.innerHTML = `<div class="table-wrap" style="max-height:35vh"><table><thead><tr>
+      <th>Recommended on</th><th>Stocks</th><th>Open</th><th>Target hit</th><th>Stop loss hit</th><th>Hit rate</th>
+      <th>Avg trading days to target</th><th>Checked through</th><th></th></tr></thead><tbody>${dates.map(d => `<tr>
+      <td>${escapeHtml(d.signal_date)}</td><td class="num">${d.total}</td><td class="num">${d.open}</td>
+      <td class="num">${d.target_hit ? `<span class="pos">${d.target_hit}</span>` : 0}</td>
+      <td class="num">${d.stop_hit ? `<span class="neg">${d.stop_hit}</span>` : 0}</td>
+      <td class="num">${d.hit_rate_pct === null ? "—" : `${d.hit_rate_pct}%`}</td>
+      <td class="num">${d.avg_trading_days_to_target ?? "—"}</td>
+      <td>${escapeHtml(d.checked_through || "not yet")}</td>
+      <td><button type="button" class="secondary small" data-rec-show="${d.signal_date}">Show</button>
+          <button type="button" class="small" data-rec-verify="${d.signal_date}">Verify</button></td>
+    </tr>`).join("")}</tbody></table></div>`;
+    $$("[data-rec-show]", el).forEach(b => b.addEventListener("click", () => showRecDate(b.dataset.recShow)));
+    $$("[data-rec-verify]", el).forEach(b => b.addEventListener("click", () => verifyRecDate(b)));
+  }
+
+  function renderSaved(day, list) {
+    $("#rec-saved-caption").textContent = `Recommendations saved for ${day}`;
+    $("#rec-saved").innerHTML = `<div class="table-wrap"><table><thead><tr>
+      <th>Symbol</th><th>Buy</th><th>Target</th><th>Stop loss</th><th>Target hit?</th><th>Status</th>
+      <th>Best gain</th><th>Last close</th><th>Checked through</th><th>Signals</th></tr></thead><tbody>${list.map(t => `<tr>
+      <td><a href="${URLS.stock.replace("__symbol__", encodeURIComponent(t.symbol))}" target="_blank" rel="noopener">${escapeHtml(t.symbol)}</a></td>
+      <td class="num">${fmtNum2(t.buy_price)}</td>
+      <td class="num">${fmtNum2(t.target)}${pctSpan(t.target_pct)}</td>
+      <td class="num">${t.stop_loss === null ? "—" : fmtNum2(t.stop_loss) + pctSpan(t.stop_loss_pct)}</td>
+      <td>${t.status === "target_hit" ? `<b class="pos">Yes · ${escapeHtml(t.hit_date)}</b> (${t.trading_days} trading days)`
+          : t.status === "stop_hit" ? `<span class="neg">No, stop loss hit first · ${escapeHtml(t.hit_date)}</span>`
+          : t.checked_through ? "Not yet" : "Waiting for newer candles"}</td>
+      <td><span class="badge ${t.status}">${STATUS_TEXT[t.status] || escapeHtml(t.status)}</span></td>
+      <td class="num">${t.max_high === null ? "—" : fmtNum2(t.max_high) + pctSpan(t.max_gain_pct)}</td>
+      <td class="num">${t.last_close === null ? "—" : fmtNum2(t.last_close) + pctSpan(t.current_return_pct)}</td>
+      <td>${escapeHtml(t.checked_through || "—")}</td>
+      <td class="wrap">${escapeHtml(t.notes)}</td>
+    </tr>`).join("")}</tbody></table></div>`;
+  }
+
+  async function showRecDate(day) {
+    try {
+      const data = await callApi(`${URLS.tracked}?technique=${REC}&signal_date=${encodeURIComponent(day)}`);
+      renderSaved(day, data.results);
+    } catch (e) {
+      $("#rec-saved-caption").textContent = e.message;
+    }
+  }
+
+  async function verifyRecDate(btn) {
+    const day = btn.dataset.recVerify;
+    btn.disabled = true;
+    const stop = startTimer($("#rec-saved-caption"), `Verifying ${day}…`);
+    try {
+      const data = await callApi(URLS.trackedVerify, { method: "POST", body: { technique: REC, signal_date: day } });
+      stop();
+      renderSaved(day, data.results);
+      $("#rec-saved-caption").textContent += ` · verified against candles through ${data.results[0]?.checked_through || "—"}`;
+      loadRecDates();
+    } catch (e) {
+      stop();
+      $("#rec-saved-caption").textContent = e.message;
+      btn.disabled = false;
+    }
+  }
+
+  loadRecDates();
+
+  const fmtNum2 = v => Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function visibleRows() {
+    const q = filterEl.value.trim().toUpperCase();
+    let out = q ? rows.filter(r => String(r.symbol).toUpperCase().includes(q)) : rows.slice();
+    if (sort.key) {
+      out.sort((a, b) => {
+        const x = a[sort.key], y = b[sort.key];
+        if (x === y) return 0;
+        if (x === null || x === undefined) return 1;
+        if (y === null || y === undefined) return -1;
+        return (typeof x === "number" ? x - y : String(x).localeCompare(String(y))) * sort.dir;
+      });
+    }
+    return out;
+  }
+
+  function render() {
+    const data = visibleRows();
+    downloadBtn.disabled = !rows.length;
+    if (!rows.length) {
+      resultsEl.innerHTML = `<div class="empty">No matches. Try loosening the filters.</div>`;
+      return;
+    }
+    if (columns.length === 1) {
+      resultsEl.innerHTML = `<div class="chips">${data.map(r => `<span class="chip">${escapeHtml(r.symbol)}</span>`).join("")}</div>`;
+      return;
+    }
+    const head = columns.map(c =>
+      `<th data-key="${c}"${sort.key === c ? ` data-dir="${sort.dir > 0 ? "asc" : "desc"}"` : ""}>${c.replace(/_/g, " ")}</th>`
+    ).join("");
+    const body = data.map(r => `<tr>${columns.map(c => {
+      const v = Array.isArray(r[c]) ? r[c].join(c === "reasons" ? " · " : ", ") : r[c];
+      const num = typeof v === "number";
+      if ((c === "verdict" || c === "confidence") && v) {
+        return `<td><span class="badge ${c === "verdict" ? v : ""}">${escapeHtml(v)}</span></td>`;
+      }
+      if (["reasons", "world_impact", "key_headline"].includes(c)) {
+        return `<td class="wrap">${escapeHtml(v || "—")}</td>`;
+      }
+      if (c === "outcome" && v) {
+        const cls = { target_hit: "target_hit", stop_hit: "stop_hit" }[v] || "";
+        return `<td><span class="badge ${cls}">${escapeHtml(v.replace(/_/g, " "))}</span></td>`;
+      }
+      if (c === "symbol" && v) {
+        return `<td><a href="${URLS.stock.replace("__symbol__", encodeURIComponent(v))}" target="_blank" rel="noopener">${escapeHtml(v)}</a></td>`;
+      }
+      return `<td${num ? ' class="num"' : ""}>${v === null || v === undefined ? "—" : escapeHtml(num ? v.toLocaleString(undefined, { maximumFractionDigits: 4 }) : v)}</td>`;
+    }).join("")}</tr>`).join("");
+    resultsEl.innerHTML = `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+    $$("th[data-key]", resultsEl).forEach(th => th.addEventListener("click", () => {
+      const key = th.dataset.key;
+      sort = { key, dir: sort.key === key ? -sort.dir : (typeof rows[0][key] === "number" ? -1 : 1) };
+      render();
+    }));
+  }
+
+  filterEl.addEventListener("input", render);
+
+  downloadBtn.addEventListener("click", () => {
+    const esc = v => v === null || v === undefined ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+    const csv = [columns.join(","), ...visibleRows().map(r => columns.map(c => esc(r[c])).join(","))].join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `${lastName.toLowerCase().replace(/\s+/g, "_")}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  }
+})();
+</script>
+</body>
+</html>

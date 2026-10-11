@@ -1,0 +1,13 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Generated data / logs (SmartApi writes auth headers into logs/)
+data/
+logs/
+*.csv

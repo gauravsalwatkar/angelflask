@@ -12,8 +12,7 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL)
 # Create a configured "Session" class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for model classes
-Base = declarative_base()
+# Base class for model classes44
 
 # Dependency to get a session in FastAPI routes
 def get_db():
