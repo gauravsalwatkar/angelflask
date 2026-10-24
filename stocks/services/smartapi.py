@@ -1,15 +1,21 @@
-"""Lazily authenticated, process-wide Angel One SmartAPI client."""
+"""Lazily authenticated, process-wide Angel One SmartAPI client.
+
+Angel One sessions end daily, so a client logged in on an earlier day (India time) logs in again
+on its next use; long-running processes (the live feed, the automatic paper trader) keep working.
+"""
 import logging
 import threading
 
 import pyotp
 from django.conf import settings
+from django.utils import timezone
 from SmartApi import SmartConnect
 
 logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _client = None
+_login_day = None
 
 
 class SmartApiLoginError(RuntimeError):
@@ -17,11 +23,13 @@ class SmartApiLoginError(RuntimeError):
 
 
 def get_client(force_login=False):
-    """Return a logged-in SmartConnect client, logging in on first use."""
-    global _client
+    """Return a logged-in SmartConnect client, logging in on first use and again each new day."""
+    global _client, _login_day
     with _lock:
-        if _client is None or force_login:
+        today = timezone.localdate()
+        if _client is None or force_login or _login_day != today:
             _client = _login()
+            _login_day = today
         return _client
 
 

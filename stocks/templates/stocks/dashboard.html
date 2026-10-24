@@ -5,17 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stock Screener Dashboard</title>
 <style>
+  /* Red / green / blue / white. Blue is the brand (header, buttons, tabs, tables, info tiles);
+     green always means buy or profit and red always means sell or loss, so neither is used for decoration. */
   :root {
-    --bg: #f5f6f8; --surface: #ffffff; --surface-2: #f0f2f5; --border: #e1e4e8;
-    --text: #1d2129; --muted: #677080; --accent: #2f6fde; --accent-text: #ffffff;
-    --ok: #1a8f4c; --ok-bg: #e6f5ec; --err: #c4352b; --err-bg: #fbeae8; --warn-bg: #fff6df;
+    --bg: #f5f8fd; --surface: #ffffff; --surface-2: #eef3fb; --border: #dbe4f1;
+    --text: #0f1b33; --muted: #5b6b85; --accent: #1d4ed8; --accent-text: #ffffff;
+    --ok: #15803d; --ok-bg: #e8f7ee; --err: #dc2626; --err-bg: #fdecec; --warn-bg: #eaf1ff;
     --radius: 10px; --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+    --c1: #1d4ed8; --c2: #dc2626; --c3: #3b82f6; --c4: #16a34a; --c5: #0369a1; --c6: #1e3a8a;
+    --c1-bg: #eaf0fe; --c2-bg: #fdecec; --c3-bg: #eaf1ff; --c4-bg: #e8f7ee; --c5-bg: #e6f3fb; --c6-bg: #e9edf8;
+    --hero: linear-gradient(120deg, #0b2a6f 0%, #1d4ed8 60%, #2563eb 100%);
+    --btn: linear-gradient(135deg, #1d4ed8, #2563eb);
+    --page: linear-gradient(180deg, #edf3fd 0%, #f7faff 45%, #ffffff 100%);
+    --shadow: rgba(29, 78, 216, .28);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #111418; --surface: #1a1e24; --surface-2: #232830; --border: #2e343d;
-      --text: #e6e9ee; --muted: #9aa3b0; --accent: #5b8ff0; --accent-text: #0b0e12;
-      --ok: #4cc283; --ok-bg: #16301f; --err: #f07a70; --err-bg: #3a1d1b; --warn-bg: #352d16;
+      --bg: #0b1220; --surface: #111a2e; --surface-2: #17223a; --border: #24324f;
+      --text: #e7edf8; --muted: #9aa8c2; --accent: #60a5fa; --accent-text: #0b1220;
+      --ok: #4ade80; --ok-bg: #0f2d1d; --err: #f87171; --err-bg: #3a1618; --warn-bg: #15264a;
+      --c1: #60a5fa; --c2: #f87171; --c3: #93c5fd; --c4: #4ade80; --c5: #38bdf8; --c6: #a5b4fc;
+      --c1-bg: #15264a; --c2-bg: #3a1618; --c3-bg: #15264a; --c4-bg: #0f2d1d; --c5-bg: #0e2a3d; --c6-bg: #1b2547;
+      --hero: linear-gradient(120deg, #071636 0%, #0f2f7a 60%, #1d4ed8 100%);
+      --btn: linear-gradient(135deg, #1d4ed8, #2563eb);
+      --page: linear-gradient(180deg, #0a1122 0%, #0b1324 50%, #0c1426 100%);
+      --shadow: rgba(0, 0, 0, .45);
     }
   }
   * { box-sizing: border-box; }
@@ -58,8 +72,8 @@
   .status { font-size: 13px; color: var(--muted); }
   .result { margin-top: 12px; padding: 10px 12px; border-radius: 6px; font-size: 13px; white-space: pre-wrap;
             font-family: var(--mono); word-break: break-word; }
-  .result.ok { background: var(--ok-bg); color: var(--ok); }
-  .result.err { background: var(--err-bg); color: var(--err); }
+  .result.ok { background: var(--ok-bg); color: var(--ok); border-left: 3px solid var(--ok); }
+  .result.err { background: var(--err-bg); color: var(--err); border-left: 3px solid var(--err); }
   .result:empty { display: none; }
   .progress { margin-top: 14px; }
   .bar { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
@@ -128,6 +142,72 @@
   .summary b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
   .summary span { color: var(--muted); font-size: 12px; }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- theme ---------- */
+  body { background: var(--page) fixed; background-color: var(--bg); }
+  header { background: var(--hero); border-bottom: 0; color: #fff; box-shadow: 0 4px 20px var(--shadow); }
+  header h1 { font-size: 20px; letter-spacing: .3px; }
+  header .stat { background: rgba(255, 255, 255, .14); border-radius: 10px; padding: 6px 12px; }
+  header .stat span, header .status, header a { color: rgba(255, 255, 255, .85); }
+  header a.status { background: rgba(255, 255, 255, .18); padding: 6px 12px; border-radius: 999px; text-decoration: none; }
+  header a.status:hover { background: rgba(255, 255, 255, .3); color: #fff; }
+
+  .card { border: 0; border-top: 4px solid var(--card-c, var(--c1)); box-shadow: 0 2px 12px rgba(31, 41, 80, .08); }
+  section > .card:nth-child(1) { --card-c: var(--c1); --card-bg: var(--c1-bg); }
+  section > .card:nth-child(2) { --card-c: var(--c5); --card-bg: var(--c5-bg); }
+  section > .card:nth-child(3) { --card-c: var(--c6); --card-bg: var(--c6-bg); }
+  section.card { --card-c: var(--c6); }
+  .step { background: var(--card-c, var(--c1)); color: #fff; font-weight: 700; }
+
+  button { background: var(--btn); color: #fff; box-shadow: 0 2px 6px var(--shadow); transition: transform .1s, box-shadow .15s; }
+  button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px var(--shadow); }
+  button.secondary { background: var(--c1-bg); color: var(--c1); box-shadow: none; }
+  input:focus, select:focus { outline: none; border-color: var(--c1); box-shadow: 0 0 0 3px var(--c1-bg); }
+
+  .bar span { background: linear-gradient(90deg, var(--c1), var(--c5), var(--c4)); }
+  .counters > div, .summary div, .levels div { border-left: 3px solid var(--tile-c, var(--c1)); background: var(--tile-bg, var(--c1-bg)); }
+  .counters > div { padding: 6px 10px; border-radius: 6px; }
+  .counters > div:nth-child(4n+1), .summary div:nth-child(6n+1), .levels div:nth-child(6n+1) { --tile-c: var(--c1); --tile-bg: var(--c1-bg); }
+  .counters > div:nth-child(4n+2), .summary div:nth-child(6n+2), .levels div:nth-child(6n+2) { --tile-c: var(--c5); --tile-bg: var(--c5-bg); }
+  .counters > div:nth-child(4n+3), .summary div:nth-child(6n+3), .levels div:nth-child(6n+3) { --tile-c: var(--c6); --tile-bg: var(--c6-bg); }
+  .counters > div:nth-child(4n+4), .summary div:nth-child(6n+4), .levels div:nth-child(6n+4) { --tile-c: var(--c3); --tile-bg: var(--c3-bg); }
+  .summary div:nth-child(6n+5), .levels div:nth-child(6n+5) { --tile-c: var(--c1); --tile-bg: var(--c1-bg); }
+  .summary div:nth-child(6n+6), .levels div:nth-child(6n+6) { --tile-c: var(--c5); --tile-bg: var(--c5-bg); }
+
+  .tabs { gap: 6px; padding-top: 4px; padding-bottom: 8px; border-bottom-color: transparent; }
+  .tab { background: var(--surface-2); color: var(--muted); border-radius: 999px; border-bottom: 0; padding: 7px 14px; box-shadow: none; }
+  .tab:hover:not(:disabled) { color: var(--text); box-shadow: none; }
+  .tab[aria-selected="true"] { background: var(--hero); color: #fff; box-shadow: 0 2px 8px var(--shadow); }
+
+  .table-wrap { border: 0; box-shadow: 0 1px 6px rgba(31, 41, 80, .08); }
+  th { background: var(--c1-bg); color: var(--c1); }
+  tbody tr:nth-child(even) { background: color-mix(in srgb, var(--c6-bg) 45%, transparent); }
+  tbody tr:hover { background: var(--c5-bg); }
+  .chip { background: var(--c6-bg); color: var(--c6); }
+
+  .rec { border: 0; border-left: 4px solid var(--c4); background: var(--surface); box-shadow: 0 1px 8px rgba(31, 41, 80, .08); }
+  .rec-head h3 a { color: var(--c1); text-decoration: none; }
+  .rec h4 { color: var(--c6); }
+  .market { border: 0; background: linear-gradient(135deg, var(--c5-bg), var(--c6-bg)); }
+  .warn { border-left: 3px solid var(--c3); }
+  .badge.buy, .badge.bullish, .badge.target_hit { background: #16a34a; color: #fff; }
+  .badge.avoid, .badge.bearish, .badge.stop_hit { background: #dc2626; color: #fff; }
+  .badge.watch, .badge.mixed { background: var(--c3-bg); color: var(--c1); }
+  h2 { color: var(--text); }
+  .spinner { border-top-color: var(--c1); }
+
+  .fetch-strip { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+                 padding: 10px 24px; background: var(--surface); box-shadow: 0 2px 12px rgba(31, 41, 80, .12); font-size: 13px; }
+  .fetch-strip[hidden] { display: none; }
+  .fs-state { font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--c1-bg); color: var(--c1); }
+  .fs-state.done { background: var(--ok-bg); color: var(--ok); }
+  .fs-state.bad { background: var(--err-bg); color: var(--err); }
+  .fs-bar { flex: 1 1 240px; height: 12px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .fs-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--c1), var(--c5), var(--c4));
+                 transition: width .4s ease; }
+  .fs-text { color: var(--muted); font-variant-numeric: tabular-nums; }
+  #fs-pct { font-variant-numeric: tabular-nums; min-width: 48px; }
+  @media (max-width: 900px) { .fetch-strip { padding: 10px 16px; } }
 </style>
 </head>
 <body>
@@ -137,8 +217,16 @@
   <div class="stat"><b>~{{ stats.candles_estimate|floatformat:"0g" }}</b><span>daily candles</span></div>
   <div class="stat"><b>{{ stats.latest_candle|date:"d M Y"|default:"—" }}</b><span>latest candle</span></div>
   <div class="stat" id="hdr-fetch"><b id="hdr-fetch-value">—</b><span id="hdr-fetch-label">no fetch yet</span></div>
+  <a href="{% url 'live-screen' %}" class="status"><b>Live buy screen →</b></a>
   <a href="{% url 'index' %}" class="status">API endpoints →</a>
 </header>
+
+<div class="fetch-strip" id="fetch-strip" hidden>
+  <span class="fs-state" id="fs-state">Fetching</span>
+  <div class="fs-bar" role="progressbar" aria-label="Historic fetch progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="fs-fill"></span></div>
+  <b id="fs-pct">0%</b>
+  <span class="fs-text" id="fs-text"></span>
+</div>
 
 <main>
   <!-- Data pipeline -->
@@ -159,6 +247,10 @@
       <div class="row">
         <div><label for="start_date">Start</label><input type="datetime-local" id="start_date"></div>
         <div><label for="end_date">End</label><input type="datetime-local" id="end_date"></div>
+      </div>
+      <div class="actions" style="margin-bottom:12px">
+        <label class="check"><input type="checkbox" id="fetch-only-missing" checked> Only instruments with no candles in this range</label>
+        <label class="check"><input type="checkbox" id="fetch-auto-import" checked> Import into database when done</label>
       </div>
       <div class="actions">
         <button id="fetch-start">Fetch candles</button>
@@ -203,8 +295,15 @@
   <section class="card">
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" data-tab="recommend" aria-selected="true">Recommendation</button>
+      <button class="tab" role="tab" data-tab="timemachine" aria-selected="false">Time machine</button>
+      <button class="tab" role="tab" data-tab="strategies" aria-selected="false">Proven strategies</button>
       <button class="tab" role="tab" data-tab="signals" aria-selected="false">Buy signals</button>
       <button class="tab" role="tab" data-tab="news" aria-selected="false">News</button>
+      <button class="tab" role="tab" data-tab="options" aria-selected="false">Nifty options</button>
+      <button class="tab" role="tab" data-tab="live" aria-selected="false">Live</button>
+      <button class="tab" role="tab" data-tab="moneyflow" aria-selected="false">Intraday money flow</button>
+      <button class="tab" role="tab" data-tab="paper-intraday" aria-selected="false">Paper: intraday</button>
+      <button class="tab" role="tab" data-tab="paper-swing" aria-selected="false">Paper: swing &amp; long-term</button>
       {% for s in screeners %}
         <button class="tab" role="tab" data-tab="{{ s.id }}" aria-selected="false">{{ s.title }}</button>
       {% endfor %}
@@ -231,6 +330,67 @@
       <div id="rec-dates"></div>
       <div class="toolbar"><span class="status" id="rec-saved-caption"></span></div>
       <div id="rec-saved"></div>
+    </div>
+
+    <div class="panel" data-panel="timemachine" hidden>
+      <p class="hint">Replay a trade before you take it: the next sessions are simulated 10,000 times from the stock's own
+        daily candles of the last year, and the same plan is also tested from every real past day. Leave entry, target and
+        stop loss empty to use the stock's latest plan (last close, close + 3 ATR, close - 2 ATR).</p>
+      <form class="params" id="tm-form">
+        <div><label for="tm-symbol">Stock symbol</label><input type="text" id="tm-symbol" placeholder="e.g. ITC" required></div>
+        <div><label for="tm-entry">Entry (optional)</label><input type="number" id="tm-entry" step="0.05" min="0"></div>
+        <div><label for="tm-target">Target (optional)</label><input type="number" id="tm-target" step="0.05" min="0"></div>
+        <div><label for="tm-stop">Stop loss (optional)</label><input type="number" id="tm-stop" step="0.05" min="0"></div>
+        <div><label for="tm-hold">Hold (sessions)</label><input type="number" id="tm-hold" value="20" min="1" max="120"></div>
+        <div><label for="tm-lookback">History (sessions)</label><input type="number" id="tm-lookback" value="250" min="60" max="1000"></div>
+        <div><label for="tm-paths">Replays</label><input type="number" id="tm-paths" value="10000" min="100" max="100000" step="100"></div>
+        <div><label for="tm-seed">Seed</label><input type="number" id="tm-seed" value="19" title="Same seed, same result"></div>
+      </form>
+      <div class="actions">
+        <button type="button" id="tm-run">Run time machine</button>
+        <span class="status" id="tm-status"></span>
+      </div>
+      <div id="tm-output"></div>
+    </div>
+
+    <div class="panel" data-panel="strategies" hidden>
+      <p class="hint">Every buy strategy, tested on your stored candles. Every <b>step</b> trading days the backtest buys each
+        stock a strategy picks at that day's close, then sells at the target (close + 3 ATR), the stop loss (close − 2 ATR) or after
+        <b>hold</b> sessions. A strategy is <b>proven</b> when it beat buying every liquid stock on the same dates, over at least
+        <span id="st-min-trades">200</span> trades, with a profit factor ≥ 1. The Recommendation tab ranks stocks by proven strategies only.</p>
+      <div class="params">
+        <div><label for="bt-step">Step (trading days)</label><input type="number" id="bt-step" value="5" min="1" max="60"></div>
+        <div><label for="bt-hold">Hold (sessions)</label><input type="number" id="bt-hold" value="20" min="1" max="120"></div>
+        <div><label for="bt-start">From (optional)</label><input type="date" id="bt-start" title="Empty = oldest candle"></div>
+        <div><label for="bt-end">To (optional)</label><input type="date" id="bt-end" title="Empty = newest candle"></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="bt-run">Run backtest</button>
+        <button type="button" class="secondary" id="bt-cancel" hidden>Stop</button>
+        <span class="status" id="bt-status"></span>
+      </div>
+      <div class="progress" id="bt-progress" hidden>
+        <div class="bar" role="progressbar" aria-label="Backtest progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="bt-bar"></span></div>
+        <div class="status" id="bt-progress-text"></div>
+      </div>
+      <div class="result" id="bt-result"></div>
+
+      <h2 style="margin-top:22px">Suggestions on a date</h2>
+      <p class="hint">Pick a past date to see which stocks were suggested that day, using only the candles up to it, and whether each one
+        later reached its target or stop loss (and on which date). Leave it empty for the latest candle.</p>
+      <div class="params">
+        <div><label for="st-date">Suggestions as of</label><input type="date" id="st-date"></div>
+        <div><label for="st-count">Proven picks to show</label><input type="number" id="st-count" value="10" min="1" max="20"></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="st-picks">Proven picks on this date</button>
+        <span class="status" id="st-picks-status"></span>
+      </div>
+      <div id="st-picks-output"></div>
+
+      <h2 style="margin-top:22px">Strategies</h2>
+      <div id="st-output"><p class="hint">Loading strategies…</p></div>
+      <p class="hint" style="margin-top:10px">No brokerage or taxes are deducted (roughly 0.2–0.3% per round trip). Past results don't guarantee future returns; not investment advice.</p>
     </div>
 
     <form class="panel" data-panel="signals" hidden data-url-template="{{ signals.url_template }}">
@@ -300,6 +460,101 @@
       <p class="hint" style="margin-top:10px">Takes about 30–60 s and makes one Claude API call. Headlines can be wrong or out of context; this is not investment advice.</p>
     </form>
 
+    <div class="panel" data-panel="options" hidden>
+      <p class="hint">Intraday option levels from the formula sheet, using Angel One 15-minute candles.
+        <b>Square</b> (from 09:30): strikes = first 15-min index close rounded to 100, CE 100 below and PE 100 above; entry = next perfect square above the option's first-candle high, stop = the square below, targets = entry + 10 then the next squares.
+        <b>Bounce back</b> (from 10:15): ATM strike; from the option's first-hour low L, buy above 1.5 L, stop 1.2 L, targets 1.8 L / 2 L / 2.5 L.</p>
+      <div class="params">
+        <div><label for="opt-underlying">Index</label>
+          <select id="opt-underlying"><option value="NIFTY">Nifty</option><option value="BANKNIFTY">Bank Nifty</option></select></div>
+        <div><label for="opt-date">Date (optional)</label><input type="date" id="opt-date" title="Empty = today. A past day shows how the levels played out (only contracts that have not expired)."></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="opt-run">Calculate levels</button>
+        <button type="button" class="secondary" id="opt-sync">Sync option contracts</button>
+        <span class="status" id="opt-status"></span>
+      </div>
+      <div class="result" id="opt-sync-result"></div>
+      <p class="hint" style="margin-top:10px">Outcomes are checked from the candle after the entry on 15-minute candles; a candle touching both the stop and a target counts as the stop. Mechanical levels, not investment advice.</p>
+      <div id="opt-output"></div>
+    </div>
+
+    <div class="panel" data-panel="live" hidden>
+      <p class="hint">Live prices from the Angel One WebSocket feed, refreshed every 5 s.
+        <b>Equity</b>: today's recommendations re-checked at the live price: BUY only after 09:30, above VWAP and today's open, with reward:risk of at least 1 at the live price (max buy price).
+        <b>Options</b>: the square / bounce-back legs tracked tick by tick: BUY when the entry is crossed, ADD one more lot on a pullback that holds above the entry after target 1 (stop moves to the entry), then trail the stop.</p>
+      <div class="params">
+        <div><label for="live-count">Stocks</label><input type="number" id="live-count" value="5" min="1" max="20"></div>
+        <div><label for="live-underlying">Index</label>
+          <select id="live-underlying"><option value="NIFTY">Nifty</option><option value="BANKNIFTY">Bank Nifty</option></select></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="live-toggle">Start live</button>
+        <span class="status" id="live-status"></span>
+      </div>
+      <h2 style="margin-top:22px">Equity: buy now?</h2>
+      <div id="live-equity"><p class="hint">Not started.</p></div>
+      <h2 style="margin-top:22px">Options: buy / add position</h2>
+      <div id="live-options"><p class="hint">Not started.</p></div>
+      <p class="hint" style="margin-top:10px">Mechanical rules on live prices, not investment advice. No orders are placed.</p>
+    </div>
+
+    <div class="panel" data-panel="moneyflow" hidden>
+      <p class="hint">Where the money is going today, refreshed every 15 s. For the most liquid stocks (quoted on NSE):
+        <b>buying</b> = up today and trading above VWAP (the day's average price, so buyers have paid up all day);
+        <b>selling</b> = down and below VWAP; <b>heavy</b> = at least 1.5x the stock's usual money for this time of day.
+        <b>F&amp;O</b>: stock futures where open interest is building (fresh positions) or unwinding.</p>
+      <div class="params">
+        <div><label for="mf-count">Stocks to scan</label><input type="number" id="mf-count" value="100" min="10" max="300" step="10"></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="mf-toggle">Start money flow</button>
+        <label class="check"><input type="checkbox" id="mf-fno" checked> Include F&amp;O build-up</label>
+        <span class="status" id="mf-status"></span>
+      </div>
+      <div id="mf-signals"></div>
+      <div id="mf-output"><p class="hint">Not started.</p></div>
+
+      <h2 style="margin-top:26px">Strategy: money-flow breakout</h2>
+      <p class="hint">Buy a stock when heavy money comes in: from 09:45 to 13:00, on a 5-minute close that is
+        <b>above VWAP</b>, <b>above the first 15 minutes' high</b>, at least <b>"up today"</b> above yesterday's close, with
+        <b>"heavy money"</b> times the stock's usual traded value by that time of day. Enter at the next candle, stop at VWAP,
+        target a multiple of the risk, out by 15:15 either way. Backtest it on 5-minute candles before trusting the live signals above.</p>
+      <div class="params">
+        <div><label for="fs-rel">Heavy money (x usual)</label><input type="number" id="fs-rel" value="1.5" min="1" max="10" step="0.1"></div>
+        <div><label for="fs-change">Up today (%)</label><input type="number" id="fs-change" value="0.5" min="0" max="10" step="0.1"></div>
+        <div><label for="fs-target">Target (x risk)</label><input type="number" id="fs-target" value="2" min="0.5" max="5" step="0.5"></div>
+        <div><label for="fs-stop">Min stop distance (%)</label><input type="number" id="fs-stop" value="0.3" min="0.05" max="5" step="0.05"></div>
+        <div><label for="fs-cost">Costs per round trip (%)</label><input type="number" id="fs-cost" value="0.06" min="0" max="1" step="0.01"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="secondary" id="fs-download">Download 5-min candles</button>
+        <button type="button" id="fs-backtest">Backtest rules</button>
+        <span class="status" id="fs-status"></span>
+      </div>
+      <div id="fs-output"></div>
+      <p class="hint" style="margin-top:10px">A reading of today's trading, not investment advice. No orders are placed.</p>
+    </div>
+
+    <div class="panel" data-panel="paper-intraday" hidden>
+      <p class="hint">Practise intraday trades with virtual money: orders fill at the live price from 09:15 to 15:15,
+        buy or sell short, and anything still open is squared off at 15:15. Stops and targets close trades on their own.
+        Costs of about 0.06% per round trip are deducted. Leave quantity empty to size from your stop loss and max loss per trade.</p>
+      <div class="pp-automation"></div>
+      <div class="paper-book" data-book="intraday"></div>
+    </div>
+
+    <div class="panel" data-panel="paper-swing" hidden>
+      <p class="hint">Practise multi-day trades with virtual money, in two separate books. Orders fill at the live price
+        (the last close when the market is shut) and stay open until the stop, the target or your close; past days are
+        checked on the daily candles. Costs of about 0.25% per round trip (delivery STT and charges) are deducted.</p>
+      <div class="pp-automation"></div>
+      <h2 style="margin-top:14px">Short-term buys (days to weeks)</h2>
+      <div class="paper-book" data-book="short_term"></div>
+      <h2 style="margin-top:26px">Long-term buys (months)</h2>
+      <div class="paper-book" data-book="long_term"></div>
+    </div>
+
     <div class="panel" data-panel="engulfing" hidden>
       <p class="hint">Symbols whose last two stored candles form a bullish engulfing pattern.</p>
       <div class="actions"><button data-run-engulfing>Find symbols</button></div>
@@ -353,8 +608,12 @@
   const toSmartApi = v => v.replace("T", " ");
 
   // ---------- data pipeline jobs ----------
+  // Default range: from the day after the newest stored candle (else 30 days back) to now.
   const end = new Date();
-  const start = new Date(end.getTime() - 30 * 86400000);
+  const latestCandle = "{{ stats.latest_candle|date:'Y-m-d' }}";
+  const start = latestCandle
+    ? new Date(new Date(`${latestCandle}T00:00`).getTime() + 86400000)
+    : new Date(end.getTime() - 30 * 86400000);
   start.setHours(9, 15, 0, 0);
   $("#start_date").value = toLocalInput(start);
   $("#end_date").value = toLocalInput(end);
@@ -423,6 +682,28 @@
     if (p.eta_seconds !== null && p.eta_seconds !== undefined) time += ` · about ${fmtDuration(p.eta_seconds)} left`;
     $("#fp-time").textContent = time;
     updateHeader(p);
+    updateStrip(p);
+  }
+
+  function updateStrip(p) {
+    const pct = p.percent || 0;
+    const running = p.status === "running";
+    const stateEl = $("#fs-state");
+    $("#fetch-strip").hidden = false;
+    stateEl.textContent = running
+      ? (p.phase === "importing" ? "Importing to DB" : stopping ? "Stopping" : "Fetching")
+      : p.status[0].toUpperCase() + p.status.slice(1);
+    stateEl.className = `fs-state${p.status === "completed" ? " done" : running ? "" : " bad"}`;
+    $("#fs-fill").style.width = `${pct}%`;
+    $(".fs-bar").setAttribute("aria-valuenow", pct);
+    $("#fs-pct").textContent = `${pct}%`;
+    let text = `${fmtNum(p.processed)} of ${fmtNum(p.total)} instruments · ${fmtNum(p.fetched)} with data · ` +
+      `${fmtNum(p.failed)} no data · ${fmtNum(p.rows)} candles · ${p.start_date} → ${p.end_date}`;
+    if (running && p.eta_seconds != null) text += ` · about ${fmtDuration(p.eta_seconds)} left`;
+    if (p.only_missing) text += " · only missing";
+    if (p.imported_rows != null) text += ` · ${fmtNum(p.imported_rows)} imported to DB`;
+    if (!running && p.error) text += ` · ${p.error}`;
+    $("#fs-text").textContent = text;
   }
 
   function updateHeader(p) {
@@ -459,6 +740,9 @@
     else lines.push(`Fetch failed: ${p.error}`);
     if (s.csv_file) lines.push(`Saved ${fmtNum(s.rows)} candles from ${fmtNum(s.fetched)} instruments to ${s.csv_file}.`);
     else if (p.status !== "error") lines.push("Nothing was saved.");
+    if (s.imported_rows != null) lines.push(`Imported ${fmtNum(s.imported_rows)} new candles into the database.`);
+    if (s.import_error) lines.push(`Import failed: ${s.import_error}`);
+    if (s.not_attempted && p.only_missing) lines.push("Run the fetch again (same dates, only missing) to continue with the rest.");
     if (s.failed) lines.push(`${fmtNum(s.failed)} instruments returned no data (listed in ${s.failed_csv_file}).`);
     if (s.not_attempted) lines.push(`${fmtNum(s.not_attempted)} instruments were not fetched.`);
     fetchResult.className = `result ${p.status === "completed" ? "ok" : "err"}`;
@@ -489,7 +773,8 @@
   }
 
   fetchBtn.addEventListener("click", async () => {
-    if (!confirm("Fetching candles for every instrument can take over an hour. Start now?")) return;
+    const onlyMissing = $("#fetch-only-missing").checked;
+    if (!onlyMissing && !confirm("Fetching candles for every instrument can take over an hour. Start now?")) return;
     fetchBtn.disabled = true;
     fetchResult.textContent = "";
     fetchResult.className = "result";
@@ -498,6 +783,8 @@
       const p = await callApi(URLS.fetch, { method: "POST", body: {
         start_date: toSmartApi($("#start_date").value),
         end_date: toSmartApi($("#end_date").value),
+        only_missing: onlyMissing,
+        auto_import: $("#fetch-auto-import").checked,
       }});
       showProgress(p);
       showRunning();
@@ -646,6 +933,791 @@
     </div>`;
   }
 
+  // ---------- option levels ----------
+  const OPT_STATUS = {
+    waiting: ["", "entry not reached"], open: ["", "entered, no target yet"], target: ["target_hit", "target"],
+    all_targets: ["target_hit", "all targets"], stop_loss: ["stop_hit", "stop loss"],
+  };
+
+  function renderLeg(leg, rule) {
+    const head = `<div class="rec-head"><h3>${escapeHtml(leg.symbol || `${leg.strike} ${leg.type}`)}</h3>` +
+      (leg.expiry ? `<span class="rank">expiry ${escapeHtml(leg.expiry)} · lot ${leg.lotsize}</span>` : "");
+    if (leg.error) return `<div class="rec">${head}</div><div class="warn">${escapeHtml(leg.error)}</div></div>`;
+    const [cls, text] = OPT_STATUS[leg.status] || ["", leg.status];
+    let detail = leg.entry_time ? `entered ${leg.entry_time}` : "";
+    if (leg.targets_hit) detail += ` · ${leg.targets_hit} of ${leg.targets.length} targets hit`;
+    if (leg.stop_time) detail += ` · stop hit ${leg.stop_time}`;
+    const tile = (label, value) => `<div><b>${value}</b><span>${label}</span></div>`;
+    return `<div class="rec">${head}<span class="badge ${cls}">${text}</span><span class="status">${escapeHtml(detail)}</span></div>
+      <div class="levels">
+        ${tile(rule === "square" ? "first 15-min high" : "first-hour low", leg.reference)}
+        ${tile("entry (buy above)", leg.entry)}${tile("stop loss", leg.stop_loss)}${tile("last price", leg.last_price)}
+        ${leg.targets.map((t, i) => tile(`target ${i + 1}`, t)).join("")}
+      </div></div>`;
+  }
+
+  function renderRule(title, rule, data) {
+    if (!data.legs) return `<h2 style="margin-top:22px">${title}</h2><p class="hint">Available from ${data.available_from}.</p>`;
+    return `<h2 style="margin-top:22px">${title} · base strike ${data.base_strike}</h2>` + data.legs.map(l => renderLeg(l, rule)).join("");
+  }
+
+  $("#opt-run").addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    const params = new URLSearchParams({ underlying: $("#opt-underlying").value });
+    if ($("#opt-date").value) params.set("date", $("#opt-date").value);
+    btn.disabled = true;
+    $("#opt-output").innerHTML = "";
+    const stop = startTimer($("#opt-status"), "Fetching candles…");
+    try {
+      const data = await callApi(`${URLS.optionLevels}?${params}`);
+      const i = data.index;
+      $("#opt-status").textContent = `${data.underlying} ${data.date} · last ${i.last} at ${i.last_time}` +
+        (i.first_15m_close ? ` · first 15-min close ${i.first_15m_close}` : "") +
+        (i.first_hour_close ? ` · first-hour close ${i.first_hour_close}` : "") + ` · ${stop()}s`;
+      $("#opt-output").innerHTML = renderRule("Square (15-minute)", "square", data.square) +
+        renderRule("Bounce back (1-hour low)", "bounce_back", data.bounce_back);
+    } catch (err) {
+      stop();
+      $("#opt-status").textContent = "Failed";
+      $("#opt-output").innerHTML = `<div class="result err"></div>`;
+      $(".result", $("#opt-output")).textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $("#opt-sync").addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    const res = $("#opt-sync-result");
+    btn.disabled = true;
+    res.className = "result";
+    res.textContent = "";
+    try {
+      const data = await callApi(URLS.optionSync, { method: "POST" });
+      res.className = "result ok";
+      res.textContent = `Stored ${data.inserted} new contracts, removed ${data.expired_removed} expired.`;
+    } catch (err) {
+      res.className = "result err";
+      res.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ---------- live suggestions ----------
+  const LIVE_BADGE = { BUY: "buy", ADD: "buy", BOOK: "buy", WAIT: "watch", HOLD: "watch", AVOID: "avoid", EXIT: "avoid", SKIP: "avoid" };
+  const liveBadge = a => `<span class="badge ${LIVE_BADGE[a] || ""}">${escapeHtml(a)}</span>`;
+  const liveTile = (label, value) => `<div><b>${value ?? "–"}</b><span>${label}</span></div>`;
+  let liveTimer = null;
+
+  function renderLiveEquity(data) {
+    if (!data.suggestions.length) return `<p class="hint">${escapeHtml(data.message || "No recommendations today.")}</p>`;
+    return `<p class="hint">Plan from the ${escapeHtml(data.plan_as_of)} close.</p>` + data.suggestions.map(r => `
+      <div class="rec"><div class="rec-head"><h3>${escapeHtml(r.symbol)}</h3>${liveBadge(r.action)}
+        <span class="rank">${escapeHtml(r.exchange)} · ${r.change_pct ?? "–"}% today · gap ${r.gap_pct ?? "–"}% · ${escapeHtml(r.price_source || "no price")}</span></div>
+        <div class="levels">${liveTile("live price", r.ltp)}${liveTile("VWAP", r.vwap)}${liveTile("today's open", r.open)}
+          ${liveTile("planned buy", r.planned_buy)}${liveTile("max buy price", r.max_buy_price)}
+          ${liveTile("stop loss", r.stop_loss)}${liveTile("target", r.target)}${liveTile("reward:risk now", r.live_reward_to_risk)}
+          ${liveTile("qty to buy", r.position?.qty)}${liveTile("loss at stop", r.position?.max_loss)}</div>
+        <p><button type="button" class="secondary paper-order" data-book="short_term" data-symbol="${escapeHtml(r.symbol)}"
+          data-stop="${r.stop_loss}" data-target="${r.target}" data-source="live"
+          data-technique="${escapeHtml((r.signals || []).join("+"))}">Paper buy: short-term</button></p>
+        <ul>${r.checks.filter(c => !c.ok).map(c => `<li>✗ ${escapeHtml(c.name)}: ${escapeHtml(c.detail)}</li>`).join("") ||
+          `<li>✓ All conditions met</li>`}</ul></div>`).join("");
+  }
+
+  function renderLiveOptions(data) {
+    const rule = (title, d) => {
+      if (!d.legs.length) return `<h3 style="margin-top:16px">${title}</h3><p class="hint">Available from ${escapeHtml(d.available_from || "–")}.</p>`;
+      return `<h3 style="margin-top:16px">${title} · base strike ${d.base_strike} · index reference ${d.index_reference ?? "–"}</h3>` +
+        d.legs.map(l => `<div class="rec"><div class="rec-head"><h3>${escapeHtml(l.symbol || `${l.strike} ${l.type}`)}</h3>${liveBadge(l.action)}
+          ${l.expiry ? `<span class="rank">expiry ${escapeHtml(l.expiry)} · lot ${l.lotsize}${l.entered_at ? ` · entered ${escapeHtml(l.entered_at)}` : ""}${l.targets_hit ? ` · ${l.targets_hit} targets hit` : ""}</span>` : ""}</div>
+          ${l.targets ? `<div class="levels">${liveTile("live price", l.ltp)}${liveTile("entry", l.entry)}${liveTile("stop loss", l.stop_loss)}
+            ${liveTile("trailing stop", l.trail_stop)}${l.targets.map((t, i) => liveTile(`target ${i + 1}`, t)).join("")}</div>` : ""}
+          <div class="${l.action === "ADD" || l.action === "BUY" ? "result ok" : "warn"}">${escapeHtml(l.advice)}</div></div>`).join("");
+    };
+    return `<p class="hint">${escapeHtml(data.underlying)} ${data.index.ltp ?? "–"}</p>` +
+      rule("Square (15-minute)", data.square) + rule("Bounce back (1-hour low)", data.bounce_back);
+  }
+
+  async function refreshLive() {
+    const results = await Promise.allSettled([
+      callApi(`${URLS.liveEquity}?${new URLSearchParams({ count: $("#live-count").value })}`),
+      callApi(`${URLS.liveOptions}?${new URLSearchParams({ underlying: $("#live-underlying").value })}`),
+    ]);
+    const show = (el, res, render) => {
+      el.innerHTML = res.status === "fulfilled" ? render(res.value) : `<div class="result err"></div>`;
+      if (res.status !== "fulfilled") $(".result", el).textContent = res.reason.message;
+    };
+    show($("#live-equity"), results[0], renderLiveEquity);
+    show($("#live-options"), results[1], renderLiveOptions);
+    const ok = results.find(r => r.status === "fulfilled");
+    if (ok) {
+      const d = ok.value, f = d.feed;
+      $("#live-status").textContent = `${d.time} · market ${d.market} · feed ${f.connected ? "connected" : "not connected"}` +
+        ` (${f.subscribed} tokens${f.seconds_since_last_tick != null ? `, last tick ${f.seconds_since_last_tick}s ago` : ""})` +
+        (f.last_error && !f.connected ? ` · ${f.last_error}` : "");
+    }
+  }
+
+  $("#live-toggle").addEventListener("click", e => {
+    if (liveTimer) {
+      clearInterval(liveTimer);
+      liveTimer = null;
+      e.currentTarget.textContent = "Start live";
+      return;
+    }
+    e.currentTarget.textContent = "Stop live";
+    $("#live-status").textContent = "Connecting…";
+    let busy = false;
+    const tick = async () => { if (busy) return; busy = true; try { await refreshLive(); } finally { busy = false; } };
+    tick();
+    liveTimer = setInterval(tick, 5000);
+  });
+
+  // ---------- intraday money flow ----------
+  const FLOW = { heavy_buying: ["buy", "Heavy buying"], buying: ["buy", "Buying"], mixed: ["mixed", "Mixed"],
+                 selling: ["avoid", "Selling"], heavy_selling: ["avoid", "Heavy selling"] };
+  const crore = v => v == null ? "—" : `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: v < 10 ? 2 : 0 })} cr`;
+  const signed = v => v == null ? "—" : `<span class="${v > 0 ? "pos" : v < 0 ? "neg" : ""}">${v > 0 ? "+" : ""}${v}%</span>`;
+  let mfTimer = null;
+
+  function flowTable(rows, empty) {
+    if (!rows.length) return `<p class="hint">${empty}</p>`;
+    return `<div class="table-wrap"><table><thead><tr><th>Stock</th><th>Flow</th><th>Price</th><th>Today</th><th>vs VWAP</th>
+      <th>Traded today</th><th>vs usual</th><th>Order book buyers</th></tr></thead><tbody>` +
+      rows.map(r => `<tr><td><a href="${URLS.stock.replace("__symbol__", encodeURIComponent(r.symbol))}" target="_blank" rel="noopener"><b>${escapeHtml(r.symbol)}</b></a>
+          <span class="hint">${escapeHtml(r.exchange)}</span></td>
+        <td><span class="badge ${FLOW[r.flow][0]}">${FLOW[r.flow][1]}</span></td>
+        <td>${fmtNum2(r.ltp)}</td><td>${signed(r.change_pct)}</td><td>${signed(r.vs_vwap_pct)}</td>
+        <td>${crore(r.value_cr)}</td>
+        <td>${r.relative_turnover != null ? `<b>${r.relative_turnover}x</b>` : '<span class="hint">loading</span>'}</td>
+        <td>${r.book_buy_pct != null ? `${r.book_buy_pct}%` : "—"}</td></tr>`).join("") + `</tbody></table></div>`;
+  }
+
+  function fnoTable(title, hint, rows) {
+    return `<div><h3 style="margin:14px 0 4px">${title}</h3><p class="hint">${hint}</p>` + (rows.length
+      ? `<div class="table-wrap"><table><thead><tr><th>Stock</th><th>Price</th><th>Change</th><th>OI change</th></tr></thead><tbody>` +
+        rows.map(r => `<tr><td><b>${escapeHtml(r.symbol)}</b></td><td>${r.ltp != null ? fmtNum2(r.ltp) : "—"}</td>
+          <td>${signed(r.change_pct)}</td><td>${r.oi_change != null ? Number(r.oi_change).toLocaleString("en-IN") : "—"}</td></tr>`).join("") +
+        `</tbody></table></div>` : `<p class="hint">None right now.</p>`) + `</div>`;
+  }
+
+  function renderMoneyFlow(d) {
+    const c = d.counts, b = d.baselines;
+    let html = `<div class="levels" style="margin-top:12px">
+        <div><b class="pos">${crore(d.value_cr.buying)}</b><span>traded in stocks being bought</span></div>
+        <div><b class="neg">${crore(d.value_cr.selling)}</b><span>traded in stocks being sold</span></div>
+        <div><b>${c.heavy_buying + c.buying}</b><span>buying (${c.heavy_buying} heavy)</span></div>
+        <div><b>${c.heavy_selling + c.selling}</b><span>selling (${c.heavy_selling} heavy)</span></div>
+        <div><b>${c.mixed}</b><span>mixed</span></div>
+        <div><b>${d.session_elapsed_pct}%</b><span>of the session done</span></div>
+      </div>`;
+    if (d.market === "closed") html += `<div class="warn">Market is closed: showing the last session's trading.</div>`;
+    if (d.nse_tokens_loading) html += `<div class="warn">Downloading Angel One's NSE share list (a few minutes, once a week). Until then stocks are quoted on BSE, where traded values are much smaller.</div>`;
+    if (b.total && b.ready + b.failed < b.total) {
+      html += `<div class="warn">Loading each stock's usual turnover from Angel One: ${b.ready} of ${b.total} done (about a second per stock, once a day). "vs usual" fills in as it loads.</div>`;
+    }
+    html += `<h2 style="margin-top:18px">Money going in: stocks being bought</h2>` + flowTable(d.buying, "No stock is up and above VWAP right now.");
+    html += `<h2 style="margin-top:18px">Money going out: stocks being sold</h2>` + flowTable(d.selling, "No stock is down and below VWAP right now.");
+    html += `<h2 style="margin-top:18px">Unusual activity: most money vs usual</h2>` + flowTable(d.unusual, "Waiting for usual-turnover figures.");
+    if (d.fno) {
+      const f = d.fno;
+      html += `<h2 style="margin-top:22px">F&amp;O: where positions are building</h2>` +
+        (f.errors && f.errors.length ? `<div class="warn">${escapeHtml(f.errors.join(" · "))}</div>` : "") +
+        `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:0 18px">` +
+        fnoTable("Long build-up", "Price up, open interest up: fresh buying.", f.long_buildup) +
+        fnoTable("Short covering", "Price up, open interest down: sellers getting out.", f.short_covering) +
+        fnoTable("Short build-up", "Price down, open interest up: fresh selling.", f.short_buildup) +
+        fnoTable("Long unwinding", "Price down, open interest down: buyers getting out.", f.long_unwinding) + `</div>`;
+    }
+    if (d.no_price.length) html += `<p class="hint">No price yet for: ${escapeHtml(d.no_price.join(", "))}</p>`;
+    return html + `<p class="hint">${escapeHtml(d.method)}</p>`;
+  }
+
+  async function refreshMoneyFlow() {
+    try {
+      const d = await callApi(`${URLS.moneyFlow}?${new URLSearchParams({ count: $("#mf-count").value, fno: $("#mf-fno").checked })}`);
+      $("#mf-signals").innerHTML = renderSignals(d.strategy);
+      $("#mf-output").innerHTML = renderMoneyFlow(d);
+      const f = d.feed;
+      $("#mf-status").textContent = `${d.time} · market ${d.market} · feed ${f.connected ? "connected" : "not connected"} (${f.subscribed} tokens)`;
+    } catch (err) {
+      $("#mf-output").innerHTML = `<div class="result err"></div>`;
+      $("#mf-output .result").textContent = `${err.message}. Retrying…`;
+    }
+  }
+
+  // ---------- money-flow strategy ----------
+  const FS_FIELDS = [["min_rel", "fs-rel"], ["min_change_pct", "fs-change"], ["target_r", "fs-target"],
+                     ["min_stop_pct", "fs-stop"], ["cost_pct", "fs-cost"]];
+  let fsTimer = null, fsLoaded = false;
+  const pct3 = v => v == null ? "—" : `<span class="${v > 0 ? "pos" : v < 0 ? "neg" : ""}">${v > 0 ? "+" : ""}${v}%</span>`;
+
+  function renderSignals(st) {
+    if (!st) return "";
+    if (st.error) return `<div class="warn">Strategy signals failed: ${escapeHtml(st.error)}</div>`;
+    const bt = st.backtest;
+    let html = `<h2 style="margin-top:14px">Strategy signals now</h2><p class="hint">${escapeHtml(st.window)}.</p>`;
+    if (!bt) html += `<div class="warn">Not backtested yet: download the 5-minute candles and run the backtest below before trusting these.</div>`;
+    else if (!bt.proven) html += `<div class="warn">These rules are <b>not proven</b> in the backtest (${bt.overall.trades} trades, average ${bt.overall.avg_net_pct}% after costs, profit factor ${bt.overall.profit_factor ?? "—"}). Treat signals as information only.</div>`;
+    else html += `<p class="hint">Backtest ${escapeHtml(bt.period.from)} to ${escapeHtml(bt.period.to)}: ${bt.overall.trades} trades, ${bt.overall.win_rate_pct}% winners, ${bt.overall.avg_net_pct}% per trade after costs.</p>`;
+    if (st.missing_profiles) html += `<div class="warn">No 5-minute candles stored, so "heavy money" can't be measured yet. Click "Download 5-min candles" below.</div>`;
+    if (!st.signals.length) return html + `<p class="hint">No stock is getting heavy money while up and above VWAP right now.</p>`;
+    return html + `<div class="table-wrap"><table><thead><tr><th>Stock</th><th>Signal</th><th>Price</th><th>Money vs usual</th>
+        <th>Entry</th><th>Stop</th><th>Target</th><th>Qty</th><th>Missing</th></tr></thead><tbody>` +
+      st.signals.map(r => `<tr><td><b>${escapeHtml(r.symbol)}</b><br>${signed(r.change_pct)}</td>
+        <td><span class="badge ${r.action === "SIGNAL" ? "buy" : "watch"}">${r.action === "SIGNAL" ? "BUY SIGNAL" : "WATCH"}</span></td>
+        <td>${fmtNum2(r.ltp)}<br><span class="hint">VWAP ${fmtNum2(r.vwap)}</span></td><td><b>${r.relative_value}x</b></td>
+        <td>${fmtNum2(r.entry)}</td><td class="neg">${fmtNum2(r.stop_loss)}</td><td class="pos">${fmtNum2(r.target)}</td>
+        <td>${r.position ? `${r.position.qty}<br><span class="hint">₹${fmtNum2(r.position.max_loss)} risk</span>` : "—"}</td>
+        <td>${r.checks.filter(c => !c.ok).map(c => `✗ ${escapeHtml(c.name)}: ${escapeHtml(c.detail)}`).join("<br>") || "✓ All rules met"}
+          <br><button type="button" class="secondary paper-order" data-book="intraday" data-symbol="${escapeHtml(r.symbol)}"
+            data-stop="${r.stop_loss}" data-target="${r.target}" data-source="money_flow" data-technique="money_flow_breakout">Paper buy</button></td></tr>`).join("") +
+      `</tbody></table></div>`;
+  }
+
+  function statRow(label, s) {
+    if (!s) return `<tr><td>${label}</td><td colspan="8" class="hint">No trades</td></tr>`;
+    return `<tr><td><b>${label}</b></td><td>${s.trades}</td><td>${s.win_rate_pct}%</td><td>${pct3(s.avg_net_pct)}</td>
+      <td>${s.profit_factor ?? "—"}</td><td>${pct3(s.avg_excess_pct)}</td><td>${s.target_pct}%</td><td>${s.stop_pct}%</td><td>${s.close_pct}%</td></tr>`;
+  }
+
+  function renderFlowBacktest(bt) {
+    if (!bt) return `<p class="hint">No backtest yet.</p>`;
+    const o = bt.overall;
+    const head = `<div class="table-wrap"><table><thead><tr><th></th><th>Trades</th><th>Winners</th><th>Avg after costs</th>
+      <th>Profit factor</th><th>vs market</th><th>Target hit</th><th>Stopped</th><th>Out at 15:15</th></tr></thead><tbody>`;
+    return `<div class="${bt.proven ? "result ok" : "warn"}" style="margin-top:12px">${bt.proven
+        ? "<b>Proven</b> on this data: the live signals use these rules."
+        : "<b>Not proven</b> on this data: the edge is not there (or not steady), so treat live signals as information only."}
+        ${escapeHtml(bt.criteria)}</div>
+      <p class="hint">${escapeHtml(bt.period.from)} to ${escapeHtml(bt.period.to)} · ${bt.period.sessions} sessions · ${bt.period.stocks} stocks ·
+        ${bt.trades_per_day} trades a day · best day ${bt.best_day_pct}%, worst ${bt.worst_day_pct}% (average per trade) ·
+        rules: ${bt.params.min_rel}x money, +${bt.params.min_change_pct}% up, target ${bt.params.target_r}R, costs ${bt.params.cost_pct}%</p>
+      <div class="levels">
+        <div><b>${o.trades}</b><span>trades</span></div><div><b>${o.win_rate_pct}%</b><span>winners</span></div>
+        <div><b>${pct3(o.avg_net_pct)}</b><span>average per trade, after costs</span></div>
+        <div><b>${o.profit_factor ?? "—"}</b><span>profit factor</span></div>
+        <div><b>${pct3(o.avg_excess_pct)}</b><span>vs buying everything then</span></div>
+        <div><b>${pct3(o.total_net_pct)}</b><span>sum of all trades</span></div>
+      </div>
+      <h3 style="margin:14px 0 4px">Did it hold up?</h3>${head}
+        ${statRow("All", o)}${statRow("First half", o.halves[0])}${statRow("Second half", o.halves[1])}
+        ${Object.entries(bt.by_entry_time).map(([k, s]) => statRow(`Entry ${k}`, s)).join("")}
+        ${Object.entries(bt.by_relative_value).map(([k, s]) => statRow(`Money ${k}`, s)).join("")}
+      </tbody></table></div>
+      <details style="margin-top:10px"><summary>Last ${bt.recent_trades.length} trades</summary><div class="table-wrap"><table><thead><tr>
+        <th>Day</th><th>Stock</th><th>Entry</th><th>Stop</th><th>Target</th><th>Exit</th><th>Result</th><th>Money</th></tr></thead><tbody>` +
+      bt.recent_trades.map(t => `<tr><td>${escapeHtml(t.day)}</td><td><b>${escapeHtml(t.symbol)}</b></td>
+        <td>${fmtNum2(t.entry)} at ${escapeHtml(t.entry_time)}</td><td>${fmtNum2(t.stop_loss)}</td><td>${fmtNum2(t.target)}</td>
+        <td>${fmtNum2(t.exit)} (${escapeHtml(t.exit_kind)}, ${escapeHtml(t.exit_time)})</td><td>${pct3(t.net_pct)}</td><td>${t.rel}x</td></tr>`).join("") +
+      `</tbody></table></div></details><p class="hint">${escapeHtml(bt.disclaimer)}</p>`;
+  }
+
+  function showCandleProgress(p) {
+    const stored = `${p.stored_stocks ?? 0} stocks stored`;
+    if (p.status === "running") {
+      $("#fs-status").innerHTML = `<span class="spinner"></span> Downloading 5-min candles: ${p.done}/${p.total} (${p.percent}%)` +
+        (p.current ? ` · ${escapeHtml(p.current)}` : "") + (p.eta_seconds != null ? ` · ~${p.eta_seconds}s left` : "");
+      return true;
+    }
+    $("#fs-status").textContent = p.status === "idle" ? stored
+      : `Download ${p.status}: ${p.done}/${p.total}${p.failed && p.failed.length ? `, ${p.failed.length} failed` : ""}` +
+        `${p.error ? ` · ${p.error}` : ""} · ${stored}`;
+    return false;
+  }
+
+  async function pollCandles() {
+    const p = await callApi(URLS.flowCandlesProgress);
+    if (!showCandleProgress(p) && fsTimer) { clearInterval(fsTimer); fsTimer = null; $("#fs-download").disabled = false; }
+  }
+
+  $("#fs-download").addEventListener("click", async e => {
+    e.currentTarget.disabled = true;
+    try {
+      showCandleProgress(await callApi(URLS.flowCandles, { method: "POST", body: { count: $("#mf-count").value } }));
+      fsTimer = setInterval(() => pollCandles().catch(() => {}), 3000);
+    } catch (err) {
+      e.currentTarget.disabled = false;
+      $("#fs-status").textContent = err.message;
+    }
+  });
+
+  $("#fs-backtest").addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const body = Object.fromEntries(FS_FIELDS.map(([k, id]) => [k, $(`#${id}`).value]));
+    const stop = startTimer($("#fs-status"), "Backtesting…");
+    try {
+      const bt = await callApi(URLS.flowBacktest, { method: "POST", body });
+      $("#fs-status").textContent = `Done in ${stop()}s`;
+      $("#fs-output").innerHTML = renderFlowBacktest(bt);
+    } catch (err) {
+      stop();
+      $("#fs-status").textContent = "";
+      $("#fs-output").innerHTML = `<div class="result err"></div>`;
+      $("#fs-output .result").textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Opening the tab shows the saved backtest (and its rules) and whether a download is running.
+  $('.tab[data-tab="moneyflow"]').addEventListener("click", async () => {
+    if (fsLoaded) return;
+    fsLoaded = true;
+    try {
+      const [bt, p] = await Promise.all([callApi(URLS.flowBacktest), callApi(URLS.flowCandlesProgress)]);
+      if (bt) {
+        FS_FIELDS.forEach(([k, id]) => { $(`#${id}`).value = bt.params[k]; });
+        $("#fs-output").innerHTML = renderFlowBacktest(bt);
+      }
+      if (showCandleProgress(p)) { $("#fs-download").disabled = true; fsTimer = setInterval(() => pollCandles().catch(() => {}), 3000); }
+    } catch (err) {
+      $("#fs-status").textContent = err.message;
+    }
+  });
+
+  $("#mf-toggle").addEventListener("click", e => {
+    if (mfTimer) {
+      clearInterval(mfTimer);
+      mfTimer = null;
+      e.currentTarget.textContent = "Start money flow";
+      return;
+    }
+    e.currentTarget.textContent = "Stop money flow";
+    $("#mf-output").innerHTML = `<p class="hint"><span class="spinner"></span> Scanning… the first load takes up to a minute.</p>`;
+    let busy = false;
+    const tick = async () => { if (busy) return; busy = true; try { await refreshMoneyFlow(); } finally { busy = false; } };
+    tick();
+    mfTimer = setInterval(tick, 15000);
+  });
+
+  // ---------- paper trading ----------
+  const PAPER_REFRESH = { intraday: 5000, short_term: 15000, long_term: 15000 };
+  const BOOK_TITLE = { intraday: "intraday", short_term: "short-term", long_term: "long-term" };
+  const rupees = v => v == null ? "—" : `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const pnlCell = v => v == null ? "—" : `<span class="${v > 0 ? "pos" : v < 0 ? "neg" : ""}">${v > 0 ? "+" : ""}${rupees(v)}</span>`;
+  let paperTimers = [];
+
+  function toast(text, ok = true) {
+    let el = $("#toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "toast";
+      el.style.cssText = "position:fixed;right:16px;bottom:16px;max-width:min(420px,calc(100vw - 32px));z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.18)";
+      document.body.appendChild(el);
+    }
+    el.className = `result ${ok ? "ok" : "err"}`;
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.hidden = true; }, 6000);
+  }
+
+  function paperSkeleton(el) {
+    const book = el.dataset.book, id = k => `pp-${book}-${k}`;
+    el.innerHTML = `<div class="pp-summary"></div>
+      <div class="actions" style="margin:6px 0">
+        <label class="hint" for="${id("day")}">Trades bought on</label>
+        <select class="pp-days" id="${id("day")}"><option value="">All dates (live view)</option></select>
+        <input type="date" class="pp-day-pick" aria-label="Pick any date">
+        <button type="button" class="secondary pp-day-clear" hidden>Back to all dates</button>
+      </div>
+      <div class="pp-day"></div>
+      <form class="params" id="${id("form")}">
+        <div><label for="${id("symbol")}">Symbol</label><input type="text" id="${id("symbol")}" placeholder="e.g. TCS" required></div>
+        ${book === "intraday" ? `<div><label for="${id("side")}">Side</label><select id="${id("side")}"><option value="BUY">Buy</option><option value="SELL">Sell short</option></select></div>` : ""}
+        <div><label for="${id("qty")}">Quantity (optional)</label><input type="number" id="${id("qty")}" min="1" step="1" placeholder="auto from stop"></div>
+        <div><label for="${id("stop")}">Stop loss</label><input type="number" id="${id("stop")}" step="0.05" min="0"></div>
+        <div><label for="${id("target")}">Target</label><input type="number" id="${id("target")}" step="0.05" min="0"></div>
+        <div><label for="${id("notes")}">Notes</label><input type="text" id="${id("notes")}" placeholder="why this trade"></div>
+      </form>
+      <div class="actions">
+        <button type="button" class="pp-place">Place paper order</button>
+        <button type="button" class="secondary pp-reset">Reset book</button>
+        <span class="status pp-status"></span>
+      </div>
+      <h3 style="margin:14px 0 4px" class="pp-open-title">Open positions</h3><div class="pp-open"><p class="hint">Loading…</p></div>
+      <h3 style="margin:14px 0 4px" class="pp-closed-title">Closed trades</h3><div class="pp-closed"></div>
+      <h3 style="margin:14px 0 4px">Which techniques work</h3><div class="pp-stats"></div>`;
+    const place = async () => {
+      const v = k => $(`#${id(k)}`)?.value;
+      const body = { book, symbol: v("symbol"), side: v("side") || "BUY", source: "manual", notes: v("notes") };
+      for (const [k, f] of [["qty", "qty"], ["stop_loss", "stop"], ["target", "target"]]) if (v(f)) body[k] = v(f);
+      if (!body.symbol) return $(`#${id("symbol")}`).focus();
+      await paperOrder(body);
+      refreshPaper(el);
+    };
+    const showDay = day => {
+      el.dataset.date = day || "";
+      $(".pp-days", el).value = day || "";
+      $(".pp-day-pick", el).value = day || "";
+      $(".pp-day-clear", el).hidden = !day;
+      $(".pp-open", el).innerHTML = $(".pp-closed", el).innerHTML = `<p class="hint">Loading…</p>`;
+      refreshPaper(el);
+    };
+    $(".pp-days", el).addEventListener("change", e => showDay(e.target.value));
+    $(".pp-day-pick", el).addEventListener("change", e => showDay(e.target.value));
+    $(".pp-day-clear", el).addEventListener("click", () => showDay(""));
+    $(".pp-place", el).addEventListener("click", place);
+    $(`#${id("form")}`).addEventListener("submit", e => { e.preventDefault(); place(); });
+    $(".pp-reset", el).addEventListener("click", async () => {
+      if (!confirm(`Delete every trade in the ${BOOK_TITLE[book]} paper book and start again?`)) return;
+      try { await callApi(URLS.paperReset, { method: "POST", body: { book } }); toast(`The ${BOOK_TITLE[book]} paper book is reset.`); }
+      catch (err) { toast(err.message, false); }
+      refreshPaper(el);
+    });
+    el.addEventListener("click", async e => {
+      const btn = e.target.closest(".pp-close");
+      if (!btn || !confirm(`Close ${btn.dataset.symbol} at the live price?`)) return;
+      btn.disabled = true;
+      try {
+        const t = await callApi(URLS.paperClose.replace("/0/", `/${btn.dataset.id}/`), { method: "POST" });
+        toast(`Closed ${t.symbol} at ${fmtNum2(t.exit_price)}: ${t.pnl >= 0 ? "+" : ""}₹${fmtNum2(t.pnl)} after costs.`, t.pnl >= 0);
+      } catch (err) { toast(err.message, false); btn.disabled = false; }
+      refreshPaper(el);
+    });
+  }
+
+  function renderPaperDay(el, d) {
+    // Days with trades, kept as is while unchanged so an open dropdown is not reset by the refresh.
+    const sel = $(".pp-days", el), key = JSON.stringify(d.dates);
+    if (sel.dataset.key !== key) {
+      sel.dataset.key = key;
+      sel.innerHTML = `<option value="">All dates (live view)</option>` + d.dates.map(x =>
+        `<option value="${x.date}">${x.date} · ${x.trades} trade${x.trades === 1 ? "" : "s"}${x.open ? `, ${x.open} open` : ""} · ${x.pnl >= 0 ? "+" : ""}₹${fmtNum2(x.pnl)}</option>`).join("");
+    }
+    sel.value = d.date || "";
+    if (d.date && sel.value !== d.date) sel.value = "";  // a picked day without trades
+    $(".pp-open-title", el).textContent = d.date ? `Still open, bought on ${d.date}` : "Open positions";
+    $(".pp-closed-title", el).textContent = d.date ? `Closed, bought on ${d.date}` : "Closed trades";
+    const s = d.day_summary;
+    if (!s) { $(".pp-day", el).innerHTML = ""; return; }
+    const time = el.dataset.book === "intraday"
+      ? (s.avg_minutes_to_target != null ? `${Math.round(s.avg_minutes_to_target)} min` : "—")
+      : (s.avg_days_to_target != null ? `${s.avg_days_to_target} days` : "—");
+    $(".pp-day", el).innerHTML = !s.trades ? `<div class="warn">No trades were bought on ${escapeHtml(s.date)}.</div>`
+      : `<div class="levels">
+        <div><b>${s.trades}</b><span>bought on ${escapeHtml(s.date)}${s.open ? ` (${s.open} still open)` : ""}</span></div>
+        <div><b>${s.target_hit_pct != null ? `${s.target_hit_pct}%` : "—"}</b><span>reached the target</span></div>
+        <div><b>${time}</b><span>average time to target</span></div>
+        <div><b>${s.stop_hit_pct != null ? `${s.stop_hit_pct}%` : "—"}</b><span>stopped out</span></div>
+        <div><b>${s.win_rate_pct != null ? `${s.win_rate_pct}%` : "—"}</b><span>winners of ${s.closed} closed</span></div>
+        <div><b>${pnlCell(s.total_pnl)}</b><span>booked P&amp;L of these trades</span></div>
+      </div>`;
+  }
+
+  function renderPaper(el, d) {
+    renderPaperDay(el, d);
+    const s = d.summary;
+    $(".pp-summary", el).innerHTML = `<div class="levels">
+        <div><b>${rupees(s.equity)}</b><span>account value (${s.return_pct > 0 ? "+" : ""}${s.return_pct}%)</span></div>
+        <div><b>${rupees(s.cash)}</b><span>cash</span></div>
+        <div><b>${rupees(s.invested)}</b><span>in ${s.open_positions} open position${s.open_positions === 1 ? "" : "s"}</span></div>
+        <div><b>${pnlCell(s.open_pnl)}</b><span>open P&amp;L</span></div>
+        <div><b>${pnlCell(s.realized_pnl)}</b><span>booked P&amp;L (after ${rupees(s.costs_paid)} costs)</span></div>
+        <div><b>${s.win_rate_pct != null ? `${s.win_rate_pct}%` : "—"}</b><span>winners of ${s.closed_trades} closed${s.profit_factor != null ? ` · PF ${s.profit_factor}` : ""}</span></div>
+      </div><p class="hint">${escapeHtml(d.rules)} Updated ${escapeHtml(d.time)} · market ${escapeHtml(d.market)}.</p>`;
+    const technique = t => `${t.auto ? '<span class="badge watch">AUTO</span> ' : ""}${escapeHtml(t.technique.replaceAll("+", " + "))}`;
+    const targetCell = t => t.target == null ? "—" : `${fmtNum2(t.target)}<br><span class="hint">${t.target_hit
+      ? `✓ hit in ${escapeHtml(t.time_to_target)}` : t.status === "open" ? "not yet" : "✗ not hit"}</span>`;
+    const moves = t => `<span class="pos">${t.best_pct != null ? `+${Math.max(t.best_pct, 0)}%` : "—"}</span> / ` +
+      `<span class="neg">${t.worst_pct != null ? `${Math.min(t.worst_pct, 0)}%` : "—"}</span>`;
+    const why = t => {
+      const sig = t.signal || {};
+      const lines = [].concat(sig.why || [], sig.rule ? [sig.rule] : [], sig.checks || [], sig.time_machine ? [`Time machine: ${sig.time_machine}`] : []);
+      return lines.length || t.notes ? `<details><summary>why</summary><ul>${lines.map(x => `<li>${escapeHtml(x)}</li>`).join("")}` +
+        `${t.notes ? `<li>${escapeHtml(t.notes)}</li>` : ""}</ul></details>` : "";
+    };
+    $(".pp-open", el).innerHTML = d.open.length ? `<div class="table-wrap"><table><thead><tr><th>Stock</th><th>Technique</th><th>Side</th><th>Qty</th>
+        <th>Bought</th><th>Now</th><th>Stop</th><th>Target</th><th>P&amp;L</th><th>Best / worst</th><th></th></tr></thead><tbody>` +
+      d.open.map(t => `<tr><td><b>${escapeHtml(t.symbol)}</b><br><span class="hint">${escapeHtml(t.exchange)} · held ${escapeHtml(t.held)}</span></td>
+        <td>${technique(t)}${why(t)}</td><td>${t.side === "BUY" ? "Buy" : "Short"}</td><td>${t.qty}</td>
+        <td>${fmtNum2(t.entry_price)}<br><span class="hint">${escapeHtml(t.entry_at)}</span></td>
+        <td>${t.ltp != null ? fmtNum2(t.ltp) : "—"}</td><td>${t.stop_loss != null ? fmtNum2(t.stop_loss) : "—"}</td>
+        <td>${targetCell(t)}</td>
+        <td>${pnlCell(t.pnl)}<br><span class="hint">${t.pnl_pct != null ? `${t.pnl_pct}%` : ""}${t.r_multiple != null ? ` · ${t.r_multiple}R` : ""}</span></td>
+        <td>${moves(t)}</td>
+        <td><button type="button" class="secondary pp-close" data-id="${t.id}" data-symbol="${escapeHtml(t.symbol)}">Close</button></td></tr>`).join("") +
+      `</tbody></table></div>` : `<p class="hint">${d.date ? "None still open." : "No open positions."}</p>`;
+    const REASON = { target: "target", stop: "stop loss", square_off: "15:15 square-off", manual: "closed by you" };
+    $(".pp-closed", el).innerHTML = d.closed.length ? `<div class="table-wrap"><table><thead><tr><th>Stock</th><th>Technique</th><th>Side</th><th>Qty</th>
+        <th>Bought</th><th>Sold</th><th>Why out</th><th>Target</th><th>P&amp;L</th><th>Best / worst</th></tr></thead><tbody>` +
+      d.closed.map(t => `<tr><td><b>${escapeHtml(t.symbol)}</b><br><span class="hint">held ${escapeHtml(t.held)}</span></td>
+        <td>${technique(t)}${why(t)}</td><td>${t.side === "BUY" ? "Buy" : "Short"}</td><td>${t.qty}</td>
+        <td>${fmtNum2(t.entry_price)}<br><span class="hint">${escapeHtml(t.entry_at)}</span></td>
+        <td>${fmtNum2(t.exit_price)}<br><span class="hint">${escapeHtml(t.exit_at)}</span></td>
+        <td>${REASON[t.exit_reason] || escapeHtml(t.exit_reason)}</td><td>${targetCell(t)}</td>
+        <td>${pnlCell(t.pnl)}<br><span class="hint">${t.pnl_pct}%${t.r_multiple != null ? ` · ${t.r_multiple}R` : ""} · costs ₹${fmtNum2(t.costs)}</span></td>
+        <td>${moves(t)}</td></tr>`).join("") +
+      `</tbody></table></div>` : `<p class="hint">${d.date ? "None closed." : "No closed trades yet."}</p>`;
+  }
+
+  function renderPaperStats(el, st) {
+    const book = el.dataset.book;
+    const rows = st.by_technique.filter(r => r.book === book);
+    if (!rows.length) { $(".pp-stats", el).innerHTML = `<p class="hint">No trades yet.</p>`; return; }
+    const time = r => book === "intraday"
+      ? (r.avg_minutes_to_target != null ? `${Math.round(r.avg_minutes_to_target)} min` : "—")
+      : (r.avg_days_to_target != null ? `${r.avg_days_to_target} days` : "—");
+    $(".pp-stats", el).innerHTML = `<div class="table-wrap"><table><thead><tr><th>Technique</th><th>Trades</th><th>Target hit</th>
+        <th>Avg time to target</th><th>Stopped</th><th>Winners</th><th>Avg P&amp;L</th><th>Total P&amp;L</th><th>Avg R</th>
+        <th>Avg best / worst</th></tr></thead><tbody>` +
+      rows.map(r => `<tr><td><b>${escapeHtml(r.technique)}</b></td><td>${r.trades}${r.open ? `<br><span class="hint">${r.open} open</span>` : ""}</td>
+        <td>${r.target_hit_pct != null ? `${r.target_hit_pct}%` : "—"}</td><td>${time(r)}</td>
+        <td>${r.stop_hit_pct != null ? `${r.stop_hit_pct}%` : "—"}</td><td>${r.win_rate_pct != null ? `${r.win_rate_pct}%` : "—"}</td>
+        <td>${pnlCell(r.avg_pnl)}</td><td>${pnlCell(r.total_pnl)}</td><td>${r.avg_r ?? "—"}</td>
+        <td><span class="pos">${r.avg_best_pct != null ? `+${r.avg_best_pct}%` : "—"}</span> / <span class="neg">${r.avg_worst_pct ?? "—"}%</span></td></tr>`).join("") +
+      `</tbody></table></div><p class="hint">${escapeHtml(st.note)} A trade with several techniques counts for each.</p>`;
+  }
+
+  async function refreshAutomation() {
+    let a;
+    try { a = await callApi(URLS.paperAutomation); } catch { return; }
+    const KIND = { buy: "buy", exit: "watch", skip: "", error: "avoid", start: "", stop: "" };
+    const html = `<div class="${a.running ? "result ok" : "warn"}" style="margin:0 0 10px">${a.running
+        ? `<b>Automatic paper trader is running</b> · last check ${escapeHtml(a.last_cycle)} · every ${a.cycle_seconds}s
+           <button type="button" class="secondary pp-auto" data-action="stop" style="margin-left:8px">Stop</button>`
+        : `<b>Automatic paper trader is not running.</b>
+           <button type="button" class="pp-auto" data-action="start" style="margin-left:8px">Start automatic trading</button>
+           <br><span class="hint">It keeps running in the background after you close this page, until you click Stop.
+           (Or run <code>python manage.py paper_autotrade</code> in a terminal.)</span>`}
+      ${a.rules ? `<br><span class="hint">Buys up to ${a.rules.intraday_max_per_day} intraday (money-flow breakout signals), ${a.rules.short_term_max_per_day} short-term (recommendations that turn BUY live)
+        and ${a.rules.long_term_max_per_day} long-term (uptrend picks: ${escapeHtml(a.rules.long_term_techniques.join(", "))}; stop ${a.rules.long_term_stop_atr} ATR, target ${a.rules.long_term_target_atr} ATR) a day.</span>` : ""}</div>` +
+      (a.log && a.log.length ? `<details><summary>What it did (last ${a.log.length})</summary><div class="table-wrap" style="max-height:30vh"><table><tbody>` +
+        a.log.map(l => `<tr><td class="hint">${escapeHtml(l.time)}</td><td><span class="badge ${KIND[l.kind] ?? ""}">${escapeHtml(l.kind)}</span></td><td style="white-space:normal">${escapeHtml(l.text)}</td></tr>`).join("") +
+        `</tbody></table></div></details>` : "");
+    $$(".pp-automation").forEach(x => { x.innerHTML = html; });
+  }
+
+  document.addEventListener("click", async e => {
+    const btn = e.target.closest(".pp-auto");
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      await callApi(URLS.paperAutomation, { method: "POST", body: { action: btn.dataset.action } });
+      toast(btn.dataset.action === "start"
+        ? "Automatic paper trader starting… its first check takes up to a minute."
+        : "Stopping the automatic paper trader after its current check.");
+    } catch (err) {
+      toast(err.message, false);
+    }
+    setTimeout(refreshAutomation, 3000);
+  });
+
+  async function refreshPaper(el) {
+    try {
+      const day = el.dataset.date ? `&date=${el.dataset.date}` : "";
+      const [d, st] = await Promise.all([callApi(`${URLS.paper}?book=${el.dataset.book}${day}`),
+                                         callApi(`${URLS.paperStats}?book=${el.dataset.book}`)]);
+      renderPaper(el, d);
+      renderPaperStats(el, st);
+      $(".pp-status", el).textContent = "";
+    } catch (err) {
+      $(".pp-status", el).textContent = `Refresh failed: ${err.message}`;
+    }
+  }
+
+  async function paperOrder(body) {
+    try {
+      const t = await callApi(URLS.paperOrders, { method: "POST", body });
+      toast(`Paper ${t.side === "BUY" ? "bought" : "shorted"} ${t.qty} ${t.symbol} at ${fmtNum2(t.entry_price)} (${BOOK_TITLE[body.book]} book).`);
+      return t;
+    } catch (err) {
+      toast(err.message, false);
+    }
+  }
+
+  // "Paper buy" buttons on recommendations, live picks and strategy signals.
+  document.addEventListener("click", async e => {
+    const btn = e.target.closest(".paper-order");
+    if (!btn) return;
+    const b = btn.dataset;
+    const body = { book: b.book, symbol: b.symbol, side: b.side || "BUY", source: b.source || "dashboard",
+                   technique: b.technique || "manual" };
+    if (b.stop) body.stop_loss = b.stop;
+    if (b.target) body.target = b.target;
+    btn.disabled = true;
+    await paperOrder(body);
+    btn.disabled = false;
+  });
+
+  $$(".paper-book").forEach(paperSkeleton);
+  // Refresh only the books on the open tab (opening it also runs their stop / target / square-off checks).
+  $$(".tab").forEach(tab => tab.addEventListener("click", () => {
+    paperTimers.forEach(clearInterval);
+    paperTimers = [];
+    const books = $$(`.panel[data-panel="${tab.dataset.tab}"] .paper-book`);
+    books.forEach(el => {
+      refreshPaper(el);
+      paperTimers.push(setInterval(() => refreshPaper(el), PAPER_REFRESH[el.dataset.book]));
+    });
+    if (books.length) { refreshAutomation(); paperTimers.push(setInterval(refreshAutomation, 15000)); }
+  }));
+
+  // ---------- proven strategies + backtest ----------
+  const pct = v => v == null ? "—" : `${v > 0 ? "+" : ""}${v}%`;
+  const signCls = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
+  let btTimer = null;
+
+  async function loadStrategies() {
+    const out = $("#st-output");
+    try {
+      const data = await callApi(URLS.strategies);
+      $("#st-min-trades").textContent = data.criteria.min_trades;
+      out.innerHTML = renderStrategies(data);
+      $$("[data-st-run]", out).forEach(btn => btn.addEventListener("click", () => {
+        const asOf = $("#st-date").value;
+        const url = asOf ? `${btn.dataset.stRun}?${new URLSearchParams({ as_of: asOf })}` : btn.dataset.stRun;
+        runScreener(url, `${btn.dataset.stName}${asOf ? `_${asOf}` : ""}`, btn);
+        resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }));
+      syncStrategyDate();
+    } catch (e) {
+      out.innerHTML = `<div class="result err"></div>`;
+      $(".result", out).textContent = e.message;
+    }
+  }
+
+  function renderStrategies(data) {
+    const bt = data.backtest;
+    let html = "";
+    if (!bt) {
+      html += `<div class="warn" style="margin-top:14px">No backtest saved yet, so no strategy is proven and the Recommendation tab
+        uses default weights. Click <b>Run backtest</b> (it takes a few minutes).</div>`;
+    } else {
+      const m = bt.market;
+      const proven = data.strategies.filter(s => s.proven).length;
+      html += `<p class="hint" style="margin-top:14px">Backtest ${escapeHtml(bt.period.from)} to ${escapeHtml(bt.period.to)} · step ${bt.rules.step_days},
+        hold ${bt.rules.hold_days} · run ${new Date(bt.generated_at).toLocaleString()}${bt.runtime_seconds ? ` in ${fmtDuration(bt.runtime_seconds)}` : ""}</p>
+        <div class="summary">
+          <div><b>${proven} of ${data.strategies.length}</b><span>strategies proven</span></div>
+          <div><b>${fmtNum(m.trades)}</b><span>market trades (baseline)</span></div>
+          <div><b class="${signCls(m.avg_return_pct)}">${pct(m.avg_return_pct)}</b><span>avg return, any stock</span></div>
+          <div><b>${m.win_rate_pct}%</b><span>win rate, any stock</span></div>
+          <div><b>${m.profit_factor ?? "—"}</b><span>profit factor, any stock</span></div>
+          <div><b>${m.months}</b><span>months tested</span></div>
+        </div>`;
+    }
+    const rowsHtml = data.strategies.map(s => {
+      const t = s.stats;
+      const badge = s.proven ? `<span class="badge buy">proven</span>`
+        : t ? `<span class="badge avoid">no edge</span>` : `<span class="badge">not tested</span>`;
+      const cells = t ? `
+        <td class="num">${fmtNum(t.trades)}</td>
+        <td class="num ${signCls(t.avg_return_pct)}">${pct(t.avg_return_pct)}</td>
+        <td class="num ${signCls(t.excess_return_pct)}"><b>${pct(t.excess_return_pct)}</b></td>
+        <td class="num">${t.win_rate_pct}%</td>
+        <td class="num">${t.target_hit_pct}%</td>
+        <td class="num">${t.stop_hit_pct}%</td>
+        <td class="num">${t.profit_factor ?? "—"}</td>
+        <td class="num">${t.months_beating_market} / ${t.months}</td>
+        <td class="num">${t.avg_days_to_target ?? "—"}</td>` : `<td colspan="9" class="hint">Run a backtest to see results.</td>`;
+      return `<tr>
+        <td class="wrap"><b>${escapeHtml(s.title)}</b><br><span class="hint">${escapeHtml(s.description)}</span></td>
+        <td>${badge}</td>${cells}
+        <td><button type="button" class="small${s.proven ? "" : " secondary"}" data-st-run="${escapeHtml(s.url)}" data-st-name="${escapeHtml(s.name)}">Today's stocks</button></td>
+      </tr>`;
+    }).join("");
+    return html + `<div class="table-wrap" style="margin-top:12px"><table>
+      <thead><tr><th>Strategy</th><th>Verdict</th><th>Trades</th><th>Avg return</th><th title="Return above buying every liquid stock on the same dates">vs market</th>
+        <th>Win rate</th><th>Target hit</th><th>Stop hit</th><th>Profit factor</th><th>Months beating market</th><th>Days to target</th><th></th></tr></thead>
+      <tbody>${rowsHtml}</tbody></table></div>
+      <p class="hint" style="margin-top:8px">The button on each row lists the stocks that strategy picked on the chosen date (or the latest candle)
+        in the results table below; for a past date, each stock shows whether it reached its target or stop loss.</p>`;
+  }
+
+  // The row buttons follow the "Suggestions as of" date.
+  function syncStrategyDate() {
+    const asOf = $("#st-date").value;
+    $$("[data-st-run]").forEach(b => { b.textContent = asOf ? `Stocks on ${asOf}` : "Today's stocks"; });
+  }
+  $("#st-date").addEventListener("change", syncStrategyDate);
+
+  $("#st-picks").addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    const out = $("#st-picks-output");
+    const params = { count: $("#st-count").value };
+    if ($("#st-date").value) params.as_of = $("#st-date").value;
+    btn.disabled = true;
+    out.innerHTML = "";
+    const stop = startTimer($("#st-picks-status"), "Analysing…");
+    try {
+      const data = await callApi(`${URLS.recommend}?${new URLSearchParams(params)}`);
+      $("#st-picks-status").textContent = `${data.candidates} of ${data.universe} liquid stocks had a proven signal on ${data.as_of} · ${stop()}s`;
+      out.innerHTML = renderRecommendation(data);
+    } catch (err) {
+      stop();
+      $("#st-picks-status").textContent = "";
+      out.innerHTML = `<div class="result err"></div>`;
+      $(".result", out).textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function showBacktest(p) {
+    const running = p.status === "running";
+    $("#bt-run").disabled = running;
+    $("#bt-cancel").hidden = !running;
+    if (p.status === "idle") return;
+    $("#bt-progress").hidden = false;
+    $("#bt-bar").style.width = `${p.percent}%`;
+    $(".bar", $("#bt-progress")).setAttribute("aria-valuenow", p.percent);
+    let text = p.phase === "loading candles" ? "Loading every stored candle…"
+      : `${p.dates_done} of ${p.dates_total} signal dates (up to ${p.current_date}) · ${fmtNum(p.trades)} trades simulated`;
+    text += ` · ${p.percent}% · ${fmtDuration(p.elapsed_seconds)} elapsed`;
+    if (p.eta_seconds != null) text += ` · about ${fmtDuration(p.eta_seconds)} left`;
+    $("#bt-progress-text").textContent = text;
+    $("#bt-status").innerHTML = running ? `<span class="spinner"></span> Backtesting…` : "";
+    if (running) {
+      if (!btTimer) btTimer = setInterval(pollBacktest, 1500);
+      return;
+    }
+    clearInterval(btTimer);
+    btTimer = null;
+    const res = $("#bt-result");
+    res.className = `result ${p.status === "completed" ? "ok" : "err"}`;
+    res.textContent = p.status === "completed" ? `Backtest finished in ${fmtDuration(p.elapsed_seconds)}. Proven strategies updated.`
+      : p.status === "cancelled" ? "Backtest stopped. The previous results are kept."
+      : `Backtest failed: ${p.error}`;
+    if (p.status === "completed") loadStrategies();
+  }
+
+  async function pollBacktest() {
+    try { showBacktest(await callApi(URLS.backtestProgress)); }
+    catch (e) { $("#bt-status").textContent = `Can't reach the server (${e.message}); retrying…`; }
+  }
+
+  $("#bt-run").addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    $("#bt-result").className = "result";
+    $("#bt-result").textContent = "";
+    try {
+      showBacktest(await callApi(URLS.backtest, { method: "POST", body: {
+        step: Number($("#bt-step").value), hold: Number($("#bt-hold").value),
+        start_date: $("#bt-start").value || null, end_date: $("#bt-end").value || null,
+      }}));
+    } catch (err) {
+      $("#bt-result").className = "result err";
+      $("#bt-result").textContent = err.message;
+      btn.disabled = false;
+      pollBacktest();  // e.g. one is already running: show it
+    }
+  });
+
+  $("#bt-cancel").addEventListener("click", async () => {
+    try { await callApi(URLS.backtestCancel, { method: "POST" }); $("#bt-status").innerHTML = `<span class="spinner"></span> Stopping…`; }
+    catch (e) { $("#bt-status").textContent = e.message; }
+  });
+
+  if (latestCandle) { $("#st-date").max = latestCandle; $("#bt-start").max = latestCandle; $("#bt-end").max = latestCandle; }
+  loadStrategies();
+  pollBacktest();  // resume showing a backtest that is running after a page reload
+
   // ---------- recommendation ----------
   function recParams() {
     const params = { count: $("#rec-count").value };
@@ -730,7 +1802,17 @@
         <div><b class="neg">${fmtNum2(r.stop_loss)} (${r.stop_loss_pct}%)</b><span>stop loss</span></div>
         <div><b>${r.reward_to_risk ?? "—"}</b><span>reward : risk</span></div>
         <div><b>${r.expected_days_to_target ? `~${r.expected_days_to_target} sessions` : "—"}</b><span>typical time to target</span></div>
+        <div><b>${r.position ? `${r.position.qty} shares` : "—"}</b><span>size (${r.position ? `₹${fmtNum2(r.position.cost)}` : "—"})</span></div>
+        <div><b class="neg">${r.position ? `₹${fmtNum2(r.position.max_loss)}` : "—"}</b><span>loss at stop</span></div>
       </div>
+      ${r.simulation ? renderSimulation(r.simulation) : ""}
+      <p><button type="button" class="secondary tm-open" data-symbol="${escapeHtml(r.symbol)}" data-entry="${r.buy_price}"
+        data-target="${r.target}" data-stop="${r.stop_loss}">Open in time machine</button>
+        <button type="button" class="secondary paper-order" data-book="short_term" data-symbol="${escapeHtml(r.symbol)}"
+          data-stop="${r.stop_loss}" data-target="${r.target}" data-source="recommendation"
+          data-technique="${escapeHtml(r.signals.join("+"))}">Paper buy: short-term</button>
+        <button type="button" class="secondary paper-order" data-book="long_term" data-symbol="${escapeHtml(r.symbol)}"
+          data-stop="${r.stop_loss}" data-source="recommendation" data-technique="${escapeHtml(r.signals.join("+"))}">Paper buy: long-term</button></p>
       ${r.outcome ? renderOutcome(r, data.as_of) : ""}
       <h4>Why</h4><ul>${li(r.why)}</ul>
       <h4>Risks</h4><ul>${li(r.risks)}</ul>
@@ -738,6 +1820,79 @@
     </div>`).join("");
     return html + `<p class="hint" style="margin-top:12px">${escapeHtml(data.disclaimer)}</p>`;
   }
+
+  function renderSimulation(sim) {
+    if (sim.error) return `<p class="hint">Time machine: ${escapeHtml(sim.error)}</p>`;
+    const s = sim.simulation, h = sim.history;
+    return `<div class="levels">
+        <div><b class="pos">${s.target_first_pct}%</b><span>target first (replays)</span></div>
+        <div><b class="neg">${s.stop_first_pct}%</b><span>stop first (replays)</span></div>
+        <div><b>${s.still_open_pct}%</b><span>open after ${sim.rules.hold_sessions} sessions</span></div>
+        <div><b>${s.avg_return_pct > 0 ? "+" : ""}${s.avg_return_pct}%</b><span>average result</span></div>
+        <div><b>${h ? `${h.target_first_pct}% / ${h.stop_first_pct}%` : "—"}</b><span>past ${h ? h.trades : 0} days: target / stop</span></div>
+      </div>
+      <p class="hint">Time machine: ${escapeHtml(sim.verdict)} ${escapeHtml(sim.caveat)}</p>`;
+  }
+
+  // ---------- time machine ----------
+  async function runTimeMachine() {
+    const symbol = $("#tm-symbol").value.trim().toUpperCase();
+    const out = $("#tm-output");
+    if (!symbol) { $("#tm-symbol").focus(); return; }
+    const params = new URLSearchParams();
+    for (const [key, id] of [["entry", "tm-entry"], ["target", "tm-target"], ["stop_loss", "tm-stop"], ["hold", "tm-hold"],
+                             ["lookback", "tm-lookback"], ["paths", "tm-paths"], ["seed", "tm-seed"]]) {
+      if ($(`#${id}`).value !== "") params.set(key, $(`#${id}`).value);
+    }
+    $("#tm-run").disabled = true;
+    out.innerHTML = "";
+    const stop = startTimer($("#tm-status"), "Replaying…");
+    try {
+      const data = await callApi(`${URLS.simulate.replace("__symbol__", encodeURIComponent(symbol))}?${params}`);
+      $("#tm-status").textContent = `Done in ${stop()}s`;
+      const h = data.history;
+      out.innerHTML = `<div class="rec"><div class="rec-head"><h3>${escapeHtml(data.symbol)}</h3>
+          <span class="rank">${escapeHtml(data.exchange)} · plan from the ${escapeHtml(data.plan_as_of)} close · ${escapeHtml(data.rules.drawn_from)} · seed ${data.rules.seed}</span></div>
+        <div class="levels">
+          <div><b>${fmtNum2(data.entry)}</b><span>entry</span></div>
+          <div><b class="pos">${fmtNum2(data.target)} (+${data.target_pct}%)</b><span>target</span></div>
+          <div><b class="neg">${fmtNum2(data.stop_loss)} (${data.stop_loss_pct}%)</b><span>stop loss</span></div>
+        </div>
+        ${renderSimulation(data)}
+        <div class="table-wrap" style="margin-top:10px"><table><thead><tr><th></th><th>Target first</th><th>Stop first</th><th>Still open</th>
+          <th>Average</th><th>Median</th><th>Worst 5%</th><th>Best 5%</th><th>Sessions to target</th></tr></thead><tbody>
+          ${[["Replays", data.simulation], ["Real past days", h]].filter(([, s]) => s).map(([label, s]) => `<tr>
+            <td><b>${label}</b><br><span class="hint">${s.trades.toLocaleString()} trades</span></td>
+            <td class="pos">${s.target_first_pct}%</td><td class="neg">${s.stop_first_pct}%</td><td>${s.still_open_pct}%</td>
+            <td>${s.avg_return_pct}%</td><td>${s.median_return_pct}%</td><td>${s.worst_5pct_return_pct}%</td>
+            <td>${s.best_5pct_return_pct}%</td><td>${s.avg_sessions_to_target ?? "—"}</td></tr>`).join("")}
+        </tbody></table></div></div>`;
+    } catch (err) {
+      stop();
+      $("#tm-status").textContent = "";
+      out.innerHTML = `<div class="result err"></div>`;
+      $(".result", out).textContent = err.message;
+    } finally {
+      $("#tm-run").disabled = false;
+    }
+  }
+
+  $("#tm-run").addEventListener("click", runTimeMachine);
+  $("#tm-form").addEventListener("submit", e => { e.preventDefault(); runTimeMachine(); });
+  // Changing the stock clears the plan, so it defaults to that stock's own levels.
+  $("#tm-symbol").addEventListener("change", () => ["tm-entry", "tm-target", "tm-stop"].forEach(id => { $(`#${id}`).value = ""; }));
+
+  // "Open in time machine" on a recommendation: copy its plan over and run it.
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".tm-open");
+    if (!btn) return;
+    $("#tm-symbol").value = btn.dataset.symbol;
+    $("#tm-entry").value = btn.dataset.entry;
+    $("#tm-target").value = btn.dataset.target;
+    $("#tm-stop").value = btn.dataset.stop;
+    $('.tab[data-tab="timemachine"]').click();
+    runTimeMachine();
+  });
 
   function renderOutcome(r, asOf) {
     const o = r.outcome;

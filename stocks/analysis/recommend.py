@@ -11,7 +11,8 @@ This is a mechanical screen on past prices, not investment advice.
 import math
 from datetime import date
 
-from stocks.analysis import backtest, outcomes, signals
+from stocks.analysis import backtest, outcomes, risk, signals
+from stocks.analysis import simulate as time_machine
 
 MIN_TRADES = 200
 MIN_PROFIT_FACTOR = 1.0
@@ -35,9 +36,18 @@ REASONS = {
     "ema_crossover": lambda s: "The 20-day EMA has just crossed above the 50-day EMA.",
     "volume_breakout": lambda s: f"It closed above its 20-day high on {_fmt(s.volume_ratio, 1)}x its normal volume.",
     "breakout_52w": lambda s: f"It broke to a new 52-week high on {_fmt(s.volume_ratio, 1)}x its normal volume.",
+    "breakout_52w_ema": lambda s: f"It broke to a new 52-week high on {_fmt(s.volume_ratio, 1)}x its normal volume, "
+                                  f"with the EMA trend up: close > 20-day EMA ({_fmt(s.ema20)}) > 50-day EMA ({_fmt(s.ema50)}).",
     "momentum_leaders": lambda s: f"It is among the strongest stocks over 1-6 months (relative strength {s.rs_score:.0f}/100).",
     "reversal_candles": lambda s: f"A {s.pattern} candle formed after a 3%+ fall, a common reversal pattern.",
+    "engulfing_support": lambda s: f"A bullish engulfing candle formed at support near {_fmt(s.support_level, 2)}, "
+                                   f"a level that held {s.support_touches} times before.",
 }
+
+
+def is_proven(st):
+    """Whether a technique's backtest stats show an edge worth trading."""
+    return st["trades"] >= MIN_TRADES and st["excess_return_pct"] > 0 and (st["profit_factor"] or 0) >= MIN_PROFIT_FACTOR
 
 
 def _evidence_weights():
@@ -49,7 +59,7 @@ def _evidence_weights():
     for name, st in bt["techniques"].items():
         if name not in signals.TECHNIQUES:
             continue
-        if st["trades"] >= MIN_TRADES and st["excess_return_pct"] > 0 and (st["profit_factor"] or 0) >= MIN_PROFIT_FACTOR:
+        if is_proven(st):
             weights[name] = st["excess_return_pct"]
     return weights, bt
 
@@ -60,9 +70,12 @@ def _track_record(st):
             f"{st['trades']:,} trades and beat the market in {st['months_beating_market']} of {st['months']} months.")
 
 
-def recommend(*, count=3, min_price=20.0, min_avg_turnover=5_000_000, news=False, as_of=None):
+def recommend(*, count=3, min_price=20.0, min_avg_turnover=5_000_000, news=False, as_of=None, simulate=False):
     """Recommendations on the latest candle, or as they would have been on `as_of` (candles up to
-    that date only), in which case each pick also shows what happened afterwards."""
+    that date only), in which case each pick also shows what happened afterwards.
+
+    Each pick is sized to TRADING_CAPITAL / MAX_LOSS_PER_TRADE; with `simulate`, it also gets the
+    time machine's odds (stocks.analysis.simulate) from the candles up to the recommendation date."""
     weights, bt = _evidence_weights()
     requested_date = as_of
     s, as_of = signals._universe(min_price=min_price, min_avg_turnover=min_avg_turnover, as_of=as_of)
@@ -109,6 +122,10 @@ def recommend(*, count=3, min_price=20.0, min_avg_turnover=5_000_000, news=False
             risks.append(f"RSI is {row.rsi14:.0f}, overbought territory.")
         days = [bt["techniques"][n]["avg_days_to_target"] for n in proven if bt and bt["techniques"][n]["avg_days_to_target"]]
 
+        position = risk.size(float(row.close), float(row.stop_loss))
+        if position and position["lots"] == 0:
+            risks.append(risk.fits_detail(position)[1] + ": skip it or raise the limit.")
+
         picks.append({
             "rank": rank,
             "symbol": row.symbol,
@@ -122,6 +139,9 @@ def recommend(*, count=3, min_price=20.0, min_avg_turnover=5_000_000, news=False
             "stop_loss_pct": round(stop_pct, 1),
             "reward_to_risk": round(target_pct / -stop_pct, 2) if stop_pct < 0 else None,
             "expected_days_to_target": round(sum(days) / len(days)) if days else None,
+            "position": position,
+            "atr": round(float(row.atr14), 2),
+            "above_200dma": bool(row.close > row.sma200) if not math.isnan(row.sma200) else None,
             "signals": proven,
             "other_signals": also,
             "score": round(float(row._score), 2),
@@ -148,6 +168,8 @@ def recommend(*, count=3, min_price=20.0, min_avg_turnover=5_000_000, news=False
     }
     if news_info:
         result["news"] = news_info
+    if picks and simulate:
+        _add_simulations(result)
     if picks:
         _add_outcomes(result)  # for the latest date this just says "no later candles yet"
     if requested_date and bt and bt["period"]["from"] <= result["as_of"] <= bt["period"]["to"]:
@@ -171,6 +193,17 @@ def _news_check(candidates, enabled):
                  for r in scan["results"]}
     dropped = [sym for sym, r in by_symbol.items() if r["verdict"] == "avoid"]
     return by_symbol, {"market": scan["market"], "dropped_for_bad_news": dropped, "cached": scan["cached"]}
+
+
+def _add_simulations(result):
+    """The time machine's odds for each pick, or the reason it could not run."""
+    as_of = date.fromisoformat(result["as_of"])
+    for p in result["recommendations"]:
+        try:
+            p["simulation"] = time_machine.simulate(token=p["token"], exchange=p["exchange"], entry=p["buy_price"],
+                                                    target=p["target"], stop_loss=p["stop_loss"], as_of=as_of)
+        except (time_machine.NotEnoughCandles, ValueError) as exc:
+            p["simulation"] = {"error": str(exc)}
 
 
 def _add_outcomes(result):

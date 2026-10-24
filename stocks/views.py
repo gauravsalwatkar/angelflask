@@ -12,9 +12,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from stocks import serializers
-from stocks.analysis import outcomes, recommend, screeners, signals
+from stocks.analysis import (backtest, flow_strategy, live_signals, outcomes, recommend, screeners, signals,
+                             simulate)
 from stocks.models import HistoricStock, Instrument, TrackedSignal
-from stocks.services import fetch_jobs, historic, instruments, news, smartapi, tracking
+from stocks.services import (autotrade, backtest_jobs, fetch_jobs, historic, instruments, intraday, money_flow, news,
+                             option_levels, paper, smartapi, tracking)
 from stocks.services.smartapi import SmartApiLoginError
 
 logger = logging.getLogger(__name__)
@@ -74,7 +76,7 @@ def _dashboard_stats():
         "instruments": Instrument.objects.count(),
         "candles_estimate": max(row[0], 0) if row else 0,
         "latest_candle": HistoricStock.objects.order_by().aggregate(latest=Max("date"))["latest"],
-        "fetchable": Instrument.objects.filter(exch_seg__in=historic.SUPPORTED_EXCHANGES).count(),
+        "fetchable": historic.stock_instruments().count(),
     }
 
 
@@ -131,11 +133,38 @@ def dashboard(request):
             "news": reverse("news-scan"),
             "recommend": reverse("recommendation"),
             "recommendSave": reverse("recommendation-save"),
+            "simulate": reverse("simulate", args=["__symbol__"]),
             "tracked": reverse("tracked-signals"),
             "trackedDates": reverse("tracked-signal-dates"),
             "trackedVerify": reverse("tracked-signals-verify"),
+            "optionLevels": reverse("option-levels"),
+            "optionSync": reverse("option-contracts-sync"),
+            "liveEquity": reverse("live-equity"),
+            "liveOptions": reverse("live-options"),
+            "moneyFlow": reverse("money-flow"),
+            "flowCandles": reverse("money-flow-candles"),
+            "flowCandlesProgress": reverse("money-flow-candles-progress"),
+            "flowCandlesCancel": reverse("money-flow-candles-cancel"),
+            "flowBacktest": reverse("money-flow-backtest"),
+            "paper": reverse("paper"),
+            "paperOrders": reverse("paper-orders"),
+            "paperClose": reverse("paper-close", args=[0]),
+            "paperReset": reverse("paper-reset"),
+            "paperStats": reverse("paper-stats"),
+            "paperAutomation": reverse("paper-automation"),
+            "strategies": reverse("strategies"),
+            "backtest": reverse("strategies-backtest"),
+            "backtestProgress": reverse("strategies-backtest-progress"),
+            "backtestCancel": reverse("strategies-backtest-cancel"),
         },
     })
+
+
+def live_screen(request):
+    """GET /live - full-screen live buy lists (Equity and Options tabs); refreshes every 5 s."""
+    return render(request, "stocks/live.html", {"urls": {"liveEquity": reverse("live-equity"),
+                                                         "liveOptions": reverse("live-options"),
+                                                         "dashboard": reverse("dashboard")}})
 
 
 class IndexView(APIView):
@@ -175,11 +204,19 @@ class FetchHistoricView(APIView):
         serializer = serializers.FetchHistoricSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         fmt = serializers.SMARTAPI_DATETIME_FORMAT
+        data = serializer.validated_data
+        tokens = (historic.missing_tokens(data["start_date"].date(), data["end_date"].date())
+                  if data["only_missing"] else None)
+        if tokens == []:
+            return Response({"error": "Every instrument already has candles in this range"},
+                            status=status.HTTP_409_CONFLICT)
         try:
             smartapi.get_client()  # fail fast on bad credentials instead of inside the thread
             job = fetch_jobs.start(
-                serializer.validated_data["start_date"].strftime(fmt),
-                serializer.validated_data["end_date"].strftime(fmt),
+                data["start_date"].strftime(fmt),
+                data["end_date"].strftime(fmt),
+                tokens=tokens,
+                auto_import=data["auto_import"],
             )
         except SmartApiLoginError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
@@ -319,6 +356,33 @@ class StockSignalsView(APIView):
         return Response(result)
 
 
+class SimulateView(APIView):
+    """GET /simulate/<symbol> - time machine: replay a trade's next sessions 10,000 times.
+
+    Each replay chains daily candles drawn from the stock's own last year; the same plan is also
+    replayed from every past close. Query: entry, target, stop_loss (default: the latest daily
+    plan, close / close + 3 ATR / close - 2 ATR), hold, paths, lookback, seed.
+    """
+
+    def get(self, request, symbol):
+        query = serializers.SimulateQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        params = dict(query.validated_data)
+        snap = signals.get_snapshot()
+        row = snap[snap["symbol"].str.upper() == symbol.upper()]
+        if row.empty:
+            return Response({"error": f"No candles for '{symbol}'"}, status=status.HTTP_404_NOT_FOUND)
+        row = row.iloc[0]
+        for key, default in (("entry", row["close"]), ("target", row["target"]), ("stop_loss", row["stop_loss"])):
+            params.setdefault(key, float(default))
+        try:
+            result = simulate.simulate(token=row["token"], exchange=row["exchange"], **params)
+        except (simulate.NotEnoughCandles, ValueError) as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"symbol": row["symbol"], "exchange": row["exchange"], "plan_as_of": signals._clean(row["date"]),
+                         **result})
+
+
 class TrackedSignalsView(APIView):
     """GET /tracked-signals - saved signals plus hit-rate summary (?status=open|target_hit|stop_hit).
     POST /tracked-signals - save a signal: {"symbol", "buy_price", "target", "stop_loss"?, ...}.
@@ -421,11 +485,73 @@ class NewsScanView(APIView):
             return Response({"error": f"News analysis failed: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
 
 
+class StrategiesView(APIView):
+    """GET /strategies - every strategy with its saved backtest record and whether it is proven.
+
+    Proven = enough trades, beat buying every liquid stock on the same dates, profit factor >= 1;
+    these are the strategies the recommendation ranks by.
+    """
+
+    def get(self, request):
+        bt = backtest.load_results()
+        stats = bt["techniques"] if bt else {}
+        rows = [{"name": t["name"], "title": t["title"], "description": t["description"],
+                 "url": reverse("signal-technique", args=[t["name"]])} for t in signals.list_techniques()]
+        rows.append({"name": "top_picks", "title": "Top picks (2+ techniques agree)",
+                     "description": "Stocks where at least two techniques fire on the same day.",
+                     "url": reverse("signal-top-picks")})
+        for row in rows:
+            row["stats"] = stats.get(row["name"])
+            row["proven"] = bool(row["stats"]) and recommend.is_proven(row["stats"])
+        rows.sort(key=lambda r: (not r["proven"], -(r["stats"] or {}).get("excess_return_pct", -1e9)))
+        return Response({
+            "backtest": {k: bt[k] for k in ("generated_at", "period", "rules", "market", "runtime_seconds") if k in bt}
+            if bt else None,
+            "criteria": {"min_trades": recommend.MIN_TRADES, "min_profit_factor": recommend.MIN_PROFIT_FACTOR,
+                         "excess_return": "> 0 (beats buying every liquid stock on the same dates)"},
+            "strategies": rows,
+        })
+
+
+class BacktestView(APIView):
+    """POST /strategies/backtest - start a backtest of every strategy in the background.
+
+    Body: step, hold, start_date, end_date (all optional). The result replaces
+    DATA_DIR/backtest.json, which decides the proven strategies. Poll /strategies/backtest/progress.
+    """
+
+    def post(self, request):
+        serializer = serializers.BacktestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            job = backtest_jobs.start(**serializer.validated_data)
+        except backtest_jobs.BacktestAlreadyRunning as exc:
+            return Response({**backtest_jobs.progress(), "error": str(exc)}, status=status.HTTP_409_CONFLICT)
+        return Response(job, status=status.HTTP_202_ACCEPTED)
+
+
+class BacktestProgressView(APIView):
+    """GET /strategies/backtest/progress - progress of the running (or last) backtest."""
+
+    def get(self, request):
+        return Response(backtest_jobs.progress())
+
+
+class BacktestCancelView(APIView):
+    """POST /strategies/backtest/cancel - stop the running backtest; the saved results are kept."""
+
+    def post(self, request):
+        if not backtest_jobs.cancel():
+            return Response({"error": "No backtest is running"}, status=status.HTTP_409_CONFLICT)
+        return Response(backtest_jobs.progress())
+
+
 class RecommendationView(APIView):
     """GET /recommendation - which stocks to buy today and why.
 
     Ranked by the techniques that beat the market in the saved backtest. Query: count (default 3),
-    min_price, min_avg_turnover, news=on to also drop stocks with bad news (needs ANTHROPIC_API_KEY).
+    min_price, min_avg_turnover, news=on to also drop stocks with bad news (needs ANTHROPIC_API_KEY),
+    simulate=false to skip the time machine odds. Each pick is sized to your capital and max loss.
     """
 
     def get(self, request):
@@ -456,3 +582,228 @@ class SaveRecommendationView(APIView):
         except signals.NoCandles as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({**result, **tracking.save_recommendations(result)}, status=status.HTTP_201_CREATED)
+
+
+class OptionLevelsView(APIView):
+    """GET /option-levels - entry, stop loss and targets for NIFTY / BANKNIFTY options.
+
+    Query: underlying=NIFTY|BANKNIFTY, date=2026-10-15 (default today). Each level set also
+    says whether the day's later candles reached the entry, the stop loss or the targets.
+    """
+
+    def get(self, request):
+        query = serializers.OptionLevelsQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        try:
+            return Response(option_levels.option_levels(
+                query.validated_data["underlying"], query.validated_data.get("date")))
+        except SmartApiLoginError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        except option_levels.LevelsError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+class OptionContractsSyncView(APIView):
+    """POST /option-levels/sync-contracts - store live NIFTY / BANKNIFTY option contracts."""
+
+    def post(self, request):
+        try:
+            return Response(instruments.sync_index_options())
+        except Exception as exc:
+            logger.exception("Option contract sync failed")
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+class LiveEquityView(APIView):
+    """GET /live/equity - today's recommendations re-checked against live WebSocket prices.
+
+    Query: count=5. Each stock gets BUY / WAIT / AVOID with the reasons.
+    """
+
+    def get(self, request):
+        query = serializers.LiveEquityQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        try:
+            return Response(live_signals.equity_suggestions(query.validated_data["count"]))
+        except SmartApiLoginError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        except signals.NoCandles as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MoneyFlowView(APIView):
+    """GET /money-flow - intraday money flow: which liquid stocks are being bought or sold right now.
+
+    Query: count (default 100 most liquid stocks), fno=false to skip the F&O OI build-up lists.
+    Each stock: traded value today, relative turnover vs its usual day, price vs VWAP, and a
+    buying / selling / mixed reading.
+    """
+
+    def get(self, request):
+        query = serializers.MoneyFlowQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        try:
+            return Response(money_flow.money_flow(**query.validated_data))
+        except SmartApiLoginError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        except signals.NoCandles as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FlowCandlesView(APIView):
+    """POST /money-flow/candles - download 5-minute candles of the most liquid NSE stocks in the background.
+
+    Body: count (default 100). The first run fetches ~95 days per stock, later runs only the new
+    days; about a second per stock. Poll /money-flow/candles/progress.
+    """
+
+    def post(self, request):
+        serializer = serializers.FlowCandlesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        universe, loading = money_flow._universe(serializer.validated_data["count"])
+        stocks = [{"symbol": u["symbol"], "token": u["token"]} for u in universe if u["exchange"] == "NSE"]
+        if not stocks:
+            return Response({"error": "The NSE share list is still downloading (a few minutes, once a week); "
+                                      "start the money flow, wait for it, then try again" if loading
+                             else "None of these stocks has an NSE contract"}, status=status.HTTP_409_CONFLICT)
+        try:
+            return Response(intraday.start(stocks), status=status.HTTP_202_ACCEPTED)
+        except intraday.DownloadAlreadyRunning as exc:
+            return Response({**intraday.progress(), "error": str(exc)}, status=status.HTTP_409_CONFLICT)
+
+
+class FlowCandlesProgressView(APIView):
+    """GET /money-flow/candles/progress - progress of the 5-minute candle download, and what is stored."""
+
+    def get(self, request):
+        return Response({**intraday.progress(), "stored_stocks": len(intraday.stored_stocks())})
+
+
+class FlowCandlesCancelView(APIView):
+    """POST /money-flow/candles/cancel - stop the download; candles fetched so far are kept."""
+
+    def post(self, request):
+        if not intraday.cancel():
+            return Response({"error": "No download is running"}, status=status.HTTP_409_CONFLICT)
+        return Response(intraday.progress())
+
+
+class FlowBacktestView(APIView):
+    """GET /money-flow/backtest - the saved money-flow strategy backtest (null if none).
+    POST - backtest the rules (body: min_rel, min_change_pct, target_r, min_stop_pct, cost_pct) on the
+    stored 5-minute candles and save it; the live signals then use these rules.
+    """
+
+    def get(self, request):
+        return Response(flow_strategy.load_results())
+
+    def post(self, request):
+        serializer = serializers.FlowBacktestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            return Response(flow_strategy.run_and_save(serializer.validated_data))
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PaperView(APIView):
+    """GET /paper?book=intraday|short_term|long_term[&date=2026-10-26] - a paper-trading book at live prices.
+
+    Viewing it also runs its exits: stops and targets hit since the entry, and the 15:15 square-off
+    of intraday trades. With date, only the trades bought that day are listed, with a day summary;
+    `dates` lists the days that have trades.
+    """
+
+    def get(self, request):
+        query = serializers.PaperBookSerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        try:
+            return Response(paper.book(query.validated_data["book"], query.validated_data.get("date")))
+        except SmartApiLoginError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+class PaperOrderView(APIView):
+    """POST /paper/orders - open a paper trade at the live price (see PaperOrderSerializer). No real order."""
+
+    def post(self, request):
+        serializer = serializers.PaperOrderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            trade = paper.place(**serializer.validated_data)
+        except paper.PaperError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except SmartApiLoginError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response(paper._row(trade, trade.entry_price), status=status.HTTP_201_CREATED)
+
+
+class PaperCloseView(APIView):
+    """POST /paper/trades/<id>/close - close an open paper trade at the live price."""
+
+    def post(self, request, pk):
+        try:
+            return Response(paper._row(paper.close(pk)))
+        except paper.PaperError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PaperStatsView(APIView):
+    """GET /paper/stats[?book=...] - which techniques work: per technique, target hit %, time to target,
+    win rate, P&L and the best / worst move while open."""
+
+    def get(self, request):
+        book = request.query_params.get("book")
+        if book:
+            query = serializers.PaperBookSerializer(data=request.query_params)
+            query.is_valid(raise_exception=True)
+        return Response(paper.stats(book or None))
+
+
+class PaperAutomationView(APIView):
+    """GET /paper/automation - status and recent actions of the automatic paper trader.
+    POST {"action": "start"|"stop"} - start it as a background process, or ask it to stop
+    (same as `python manage.py paper_autotrade` / Ctrl+C)."""
+
+    def get(self, request):
+        return Response(autotrade.load_status())
+
+    def post(self, request):
+        action = request.data.get("action")
+        if action == "start":
+            try:
+                pid = autotrade.launch()
+            except RuntimeError as exc:
+                return Response({"error": str(exc)}, status=status.HTTP_409_CONFLICT)
+            return Response({"started": True, "pid": pid}, status=status.HTTP_202_ACCEPTED)
+        if action == "stop":
+            if not autotrade.request_stop():
+                return Response({"error": "The automatic paper trader is not running"}, status=status.HTTP_409_CONFLICT)
+            return Response({"stopping": True})
+        return Response({"error": 'action must be "start" or "stop"'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PaperResetView(APIView):
+    """POST /paper/reset {"book": ...} - delete every trade of a paper book and start again."""
+
+    def post(self, request):
+        serializer = serializers.PaperBookSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response({"deleted": paper.reset(serializer.validated_data["book"])})
+
+
+class LiveOptionsView(APIView):
+    """GET /live/options - when to buy or add to the NIFTY / BANKNIFTY option legs, from live ticks.
+
+    Query: underlying=NIFTY|BANKNIFTY. Each leg gets WAIT / BUY / HOLD / ADD / BOOK / EXIT / SKIP.
+    """
+
+    def get(self, request):
+        query = serializers.LiveOptionsQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        try:
+            return Response(live_signals.option_suggestions(query.validated_data["underlying"]))
+        except SmartApiLoginError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        except option_levels.LevelsError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)

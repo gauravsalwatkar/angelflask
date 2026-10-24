@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DJANGO_DEBUG=(bool, False),
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
-    HISTORIC_FETCH_MAX_THREADS=(int, 3),
+    HISTORIC_FETCH_MAX_THREADS=(int, 2),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -98,6 +98,14 @@ ANGEL_ONE = {
 # --- App ---
 DATA_DIR = BASE_DIR / env("DATA_DIR", default="data")
 HISTORIC_FETCH_MAX_THREADS = env("HISTORIC_FETCH_MAX_THREADS")
+
+# Position sizing (stocks.analysis.risk): each BUY is sized so the loss at the stop loss stays
+# within MAX_LOSS_PER_TRADE and the cost within TRADING_CAPITAL (rupees).
+TRADING_CAPITAL = env.float("TRADING_CAPITAL", default=100_000)
+MAX_LOSS_PER_TRADE = env.float("MAX_LOSS_PER_TRADE", default=1_000)
+
+# Paper trading (stocks.services.paper): virtual rupees per book (intraday, short-term, long-term).
+PAPER_CAPITAL = env.float("PAPER_CAPITAL", default=100_000)
 
 # News analysis (Claude). Without a key the news endpoints return an error explaining what to set.
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")

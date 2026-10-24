@@ -3,13 +3,15 @@ from datetime import datetime
 
 
 def clean_date(value):
-    """Convert an Angel API expiry string (e.g. '27-Feb-2025') to a date, or None."""
+    """Convert an Angel API expiry string (e.g. '27-Feb-2025' or '19OCT2026') to a date, or None."""
     if not value:
         return None
-    try:
-        return datetime.strptime(value, "%d-%b-%Y").date()
-    except (TypeError, ValueError):
-        return None
+    for fmt in ("%d-%b-%Y", "%d%b%Y"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def clean_decimal(value):

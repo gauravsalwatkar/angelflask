@@ -32,6 +32,9 @@ BARS_52W = 252
 MIN_BARS = 60            # symbols with less history are skipped
 STALE_DAYS = 5           # symbols whose last candle is older than the latest data by more than this are skipped
 CACHE_TIMEOUT = 6 * 60 * 60
+SWING_ORDER = 5          # a swing low is the strict lowest low of the 5 bars on each side
+SUPPORT_ATR = 0.5        # a swing low within this many ATRs of the pattern low counts as a support touch
+MIN_TOUCHES = 2          # earlier swing lows needed to call a level support
 
 _compute_lock = threading.Lock()
 
@@ -116,6 +119,34 @@ class _Windows:
         return self.rolling(cross, within, "max") == 1
 
 
+def _swing_lows(w, low, order=SWING_ORDER):
+    """Price of the swing low confirmed on each bar (the bar `order` sessions back), NaN elsewhere.
+
+    Matches argrelextrema(np.less, order): the low is strictly below the `order` lows on each side.
+    Only bars that already have `order` later bars are confirmed, so nothing looks ahead.
+    """
+    pivot = w.shift(low, order)
+    left = w.shift(w.rolling(low, order, "min"), order + 1)
+    right = w.rolling(low, order, "min")
+    return pivot.where((pivot < left) & (pivot < right))
+
+
+def _add_support(snap, df, swing_low, l1):
+    """Support touched by the last two candles: earlier swing lows near their lowest low."""
+    found = swing_low.notna().to_numpy()
+    pivots = pd.DataFrame({"symbol": df["symbol"].to_numpy()[found].astype(str),
+                           "level": swing_low.to_numpy()[found]})
+    pattern_low = np.fmin(snap["low"].to_numpy(), l1)
+    base = pd.DataFrame({"symbol": snap["symbol"], "pattern_low": pattern_low,
+                         "tol": SUPPORT_ATR * snap["atr14"]})
+    near = pivots.merge(base, on="symbol")
+    near = near[(near["level"] - near["pattern_low"]).abs() <= near["tol"]]
+    zones = near.groupby("symbol").agg(support_touches=("level", "size"), support_level=("level", "mean"))
+    snap["support_touches"] = snap["symbol"].map(zones["support_touches"]).fillna(0).astype(int).to_numpy()
+    snap["support_level"] = snap["symbol"].map(zones["support_level"]).to_numpy()
+    snap["pct_above_support"] = (snap["close"] / snap["support_level"] - 1) * 100
+
+
 def _build_snapshot(df):
     """Compute indicators on all candles and return one row per symbol (its latest bar)."""
     w = _Windows(df)
@@ -163,6 +194,7 @@ def _build_snapshot(df):
         "rsi_cross30": w.crossed_above(rsi14, 30, 3),
         "bb_dip": w.rolling(w.shift((c < bb_lower).astype(float)), 3, "max") == 1,
     }
+    swing_low = _swing_lows(w, l)
 
     last = np.flatnonzero(w.pos == w.size - 1)
     last_pos = w.pos[last]
@@ -181,6 +213,7 @@ def _build_snapshot(df):
     o1, h1, l1, c1 = (prior(df[k], 1) for k in ("open", "high", "low", "close"))
     o2, h2, l2, c2 = (prior(df[k], 2) for k in ("open", "high", "low", "close"))
     _add_derived(snap, o1, c1, o2, h2, l2, c2)
+    _add_support(snap, df, swing_low, l1)
     return snap
 
 
@@ -206,7 +239,8 @@ def _add_derived(s, o1, c1, o2, h2, l2, c2):
     downtrend = s["ret5_prev"] < -0.03
 
     hammer = downtrend & (rng > 0) & (lower_shadow >= 2 * body) & (upper_shadow <= 0.25 * rng)
-    engulfing = downtrend & (c1 < o1) & (c > o) & (o <= c1) & (c >= o1) & (body > body1)
+    s["engulfing"] = (c1 < o1) & (c > o) & (c > o1) & (o < c1)
+    engulfing = downtrend & s["engulfing"]
     morning_star = (
         downtrend & (c2 < o2) & (body2 >= 0.6 * rng2) & (body1 <= 0.3 * body2)
         & (c > o) & (c > (o2 + c2) / 2)
@@ -270,6 +304,15 @@ TECHNIQUES = {t.name: t for t in [
         score=lambda s: s.volume_ratio,
         columns=("high_52w_prev",),
         weight=2,
+    ),
+    Technique(
+        "breakout_52w_ema", "52-week high breakout + EMA trend",
+        "52-week high breakout on at least 1.5x average volume, confirmed by the EMA trend: "
+        "close > EMA20 > EMA50.",
+        condition=lambda s: (s.close > s.high_52w_prev) & (s.volume_ratio >= 1.5)
+        & (s.close > s.ema20) & (s.ema20 > s.ema50),
+        score=lambda s: s.volume_ratio,
+        columns=("high_52w_prev", "ema20", "ema50"),
     ),
     Technique(
         "volume_breakout", "20-day breakout on volume",
@@ -336,9 +379,18 @@ TECHNIQUES = {t.name: t for t in [
         score=lambda s: s.volume_ratio,
         columns=("pattern",),
     ),
+    Technique(
+        "engulfing_support", "Bullish engulfing at support",
+        f"Bullish engulfing candle whose low (or the previous candle's low) is within {SUPPORT_ATR} ATR of "
+        f"a support level made by at least {MIN_TOUCHES} earlier swing lows, closing above that support.",
+        condition=lambda s: s.engulfing & (s.support_touches >= MIN_TOUCHES) & (s.close > s.support_level),
+        score=lambda s: s.support_touches + s.volume_ratio,
+        columns=("support_level", "support_touches", "pct_above_support"),
+        weight=1.5,
+    ),
 ]}
 
-_CROSS_FLAGS = ("golden_cross", "ema_cross", "macd_cross", "rsi_cross30", "bb_dip")
+_CROSS_FLAGS = ("golden_cross", "ema_cross", "macd_cross", "rsi_cross30", "bb_dip", "engulfing")
 
 COMMON_COLUMNS = (
     "symbol", "exchange", "token", "date", "close", "change_pct", "rsi14", "volume_ratio",

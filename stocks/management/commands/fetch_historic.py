@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pandas as pd
+
 from django.core.management.base import BaseCommand, CommandError
 
 from stocks.serializers import SMARTAPI_DATETIME_FORMAT
@@ -22,8 +24,18 @@ class Command(BaseCommand):
         parser.add_argument("end_date", type=smartapi_datetime, help='e.g. "2026-07-04 15:30"')
         parser.add_argument("--import", dest="import_csv", action="store_true",
                             help="Insert the fetched CSV into historicstocks afterwards")
+        parser.add_argument("--tokens-file",
+                            help="CSV with a 'symboltoken' column; fetch only those instruments")
 
-    def handle(self, *args, start_date, end_date, import_csv, **options):
+    def handle(self, *args, start_date, end_date, import_csv, tokens_file, **options):
+        tokens = None
+        if tokens_file:
+            try:
+                tokens = pd.read_csv(tokens_file, dtype={"symboltoken": str})["symboltoken"].dropna().unique().tolist()
+            except (OSError, KeyError, ValueError) as exc:
+                raise CommandError(f"Could not read tokens from {tokens_file}: {exc}")
+            self.stdout.write(f"Fetching {len(tokens)} instruments from {tokens_file}")
+
         def on_progress(p):
             done = p["fetched"] + p["failed"]
             if done % 50 == 0 or done == p["total"]:
@@ -32,7 +44,7 @@ class Command(BaseCommand):
                     f"{p['rows']} candles)"
                 )
 
-        summary = fetch_historic_to_csv(start_date, end_date, on_progress=on_progress)
+        summary = fetch_historic_to_csv(start_date, end_date, tokens=tokens, on_progress=on_progress)
         self.stdout.write(str(summary))
 
         if summary["stopped"]:

@@ -25,8 +25,12 @@ class FetchAlreadyRunning(RuntimeError):
     pass
 
 
-def start(start_date, end_date):
-    """Start a fetch in the background; raises FetchAlreadyRunning if one is in progress."""
+def start(start_date, end_date, *, tokens=None, auto_import=False):
+    """Start a fetch in the background; raises FetchAlreadyRunning if one is in progress.
+
+    `tokens` limits the fetch to those instruments; `auto_import` inserts the CSV into
+    historicstocks when the run ends, including a run stopped early.
+    """
     global _job, _cancel_event
     with _lock:
         if _job is not None and _job["status"] == "running":
@@ -38,12 +42,17 @@ def start(start_date, end_date):
             "end_date": end_date,
             "started_at": time.time(),
             "finished_at": None,
-            "total": 0, "fetched": 0, "failed": 0, "rows": 0,
+            "total": len(tokens) if tokens is not None else 0, "fetched": 0, "failed": 0, "rows": 0,
+            "only_missing": tokens is not None,
+            "auto_import": auto_import,
+            "phase": "fetching",
+            "imported_rows": None,
             "summary": None,
             "error": None,
         }
         threading.Thread(
-            target=_run, args=(start_date, end_date, _cancel_event), name="historic-fetch", daemon=True
+            target=_run, args=(start_date, end_date, _cancel_event, tokens, auto_import),
+            name="historic-fetch", daemon=True,
         ).start()
     return progress()
 
@@ -109,10 +118,11 @@ def _update(**fields):
         _job.update(fields)
 
 
-def _run(start_date, end_date, cancel_event):
+def _run(start_date, end_date, cancel_event, tokens=None, auto_import=False):
     try:
         summary = historic.fetch_historic_to_csv(
             start_date, end_date,
+            tokens=tokens,
             on_progress=lambda counts: _update(**counts),
             cancel_event=cancel_event,
         )
@@ -122,7 +132,15 @@ def _run(start_date, end_date, cancel_event):
             status = "stopped"
         else:
             status = "completed"
-        _update(status=status, summary=summary, error=summary["stopped_reason"], finished_at=time.time())
+        if auto_import and summary["csv_file"]:
+            _update(phase="importing")
+            try:
+                summary["imported_rows"] = historic.import_historic_csv(historic.resolve_csv(summary["csv_file"]))
+                _update(imported_rows=summary["imported_rows"])
+            except Exception as exc:
+                logger.exception("Import of %s failed", summary["csv_file"])
+                summary["import_error"] = str(exc)
+        _update(status=status, phase="done", summary=summary, error=summary["stopped_reason"], finished_at=time.time())
     except Exception as exc:
         logger.exception("Historic fetch failed")
         _update(status="error", error=str(exc), finished_at=time.time())

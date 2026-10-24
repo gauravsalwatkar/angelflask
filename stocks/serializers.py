@@ -11,9 +11,29 @@ class FetchHistoricSerializer(serializers.Serializer):
 
     start_date = serializers.DateTimeField(input_formats=[SMARTAPI_DATETIME_FORMAT])
     end_date = serializers.DateTimeField(input_formats=[SMARTAPI_DATETIME_FORMAT])
+    only_missing = serializers.BooleanField(
+        default=False, help_text="Only fetch instruments with no stored candle between start_date and end_date",
+    )
+    auto_import = serializers.BooleanField(
+        default=False, help_text="Insert the fetched CSV into historicstocks when the fetch ends (also if it stops early)",
+    )
 
     def validate(self, attrs):
         if attrs["start_date"] > attrs["end_date"]:
+            raise serializers.ValidationError("start_date must be before end_date")
+        return attrs
+
+
+class BacktestSerializer(serializers.Serializer):
+    """Body for /strategies/backtest, e.g. {"step": 5, "hold": 20, "start_date": "2025-06-01"}."""
+
+    step = serializers.IntegerField(default=5, min_value=1, max_value=60, help_text="Trading days between signal dates")
+    hold = serializers.IntegerField(default=20, min_value=1, max_value=120, help_text="Maximum holding period in sessions")
+    start_date = serializers.DateField(required=False, allow_null=True, help_text="First signal date (default: oldest candle)")
+    end_date = serializers.DateField(required=False, allow_null=True, help_text="Last signal date (default: newest candle)")
+
+    def validate(self, attrs):
+        if attrs.get("start_date") and attrs.get("end_date") and attrs["start_date"] > attrs["end_date"]:
             raise serializers.ValidationError("start_date must be before end_date")
         return attrs
 
@@ -209,8 +229,81 @@ class RecommendationSerializer(serializers.Serializer):
     news = serializers.BooleanField(default=False, help_text="Also check news with Claude and drop stocks with bad news")
     as_of = serializers.DateField(required=False,
                                   help_text="Recommend as of this past date, using only candles up to it")
+    simulate = serializers.BooleanField(default=True,
+                                        help_text="Also replay each pick 10,000 times (time machine odds)")
 
     def validate(self, attrs):
         if attrs.get("news") and attrs.get("as_of"):
             raise serializers.ValidationError("News is only available for today, not for a past as_of date")
         return attrs
+
+
+class SimulateQuerySerializer(serializers.Serializer):
+    """Trade plan to replay; entry / target / stop loss default to the stock's latest daily plan."""
+
+    entry = serializers.FloatField(required=False, min_value=0, help_text="Buy price (default: last close)")
+    target = serializers.FloatField(required=False, min_value=0, help_text="Default: close + 3 ATR")
+    stop_loss = serializers.FloatField(required=False, min_value=0, help_text="Default: close - 2 ATR")
+    hold = serializers.IntegerField(default=20, min_value=1, max_value=120, help_text="Sessions before a time exit")
+    paths = serializers.IntegerField(default=10_000, min_value=100, max_value=100_000)
+    lookback = serializers.IntegerField(default=250, min_value=60, max_value=1000,
+                                        help_text="Past sessions to draw candles from")
+    seed = serializers.IntegerField(default=19, help_text="Same seed, same result")
+
+
+class MoneyFlowQuerySerializer(serializers.Serializer):
+    count = serializers.IntegerField(default=100, min_value=10, max_value=300,
+                                     help_text="How many of the most liquid stocks to scan")
+    fno = serializers.BooleanField(default=True, help_text="Also fetch the F&O OI build-up lists")
+
+
+class FlowCandlesSerializer(serializers.Serializer):
+    count = serializers.IntegerField(default=100, min_value=10, max_value=300,
+                                     help_text="How many of the most liquid stocks to download 5-minute candles for")
+
+
+class FlowBacktestSerializer(serializers.Serializer):
+    """Rules of the money-flow breakout (see stocks.analysis.flow_strategy)."""
+
+    min_rel = serializers.FloatField(default=1.5, min_value=1.0, max_value=10,
+                                     help_text="Traded value vs the usual by that time of day")
+    min_change_pct = serializers.FloatField(default=0.5, min_value=0, max_value=10, help_text="Up at least this much today")
+    target_r = serializers.FloatField(default=2.0, min_value=0.5, max_value=5, help_text="Target as a multiple of the risk")
+    min_stop_pct = serializers.FloatField(default=0.3, min_value=0.05, max_value=5,
+                                          help_text="Stop at least this far below the entry")
+    cost_pct = serializers.FloatField(default=0.06, min_value=0, max_value=1, help_text="Round-trip costs")
+
+
+BOOKS = ["intraday", "short_term", "long_term"]
+
+
+class PaperBookSerializer(serializers.Serializer):
+    book = serializers.ChoiceField(choices=BOOKS)
+    date = serializers.DateField(required=False, help_text="Only trades bought on this day")
+
+
+class PaperOrderSerializer(serializers.Serializer):
+    """A paper order, filled at the live price. Without qty, a stop loss sizes it from MAX_LOSS_PER_TRADE."""
+
+    book = serializers.ChoiceField(choices=BOOKS)
+    symbol = serializers.CharField(max_length=200)
+    side = serializers.ChoiceField(choices=["BUY", "SELL"], default="BUY", help_text="SELL = short, intraday only")
+    qty = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    stop_loss = serializers.FloatField(required=False, allow_null=True, min_value=0)
+    target = serializers.FloatField(required=False, allow_null=True, min_value=0)
+    source = serializers.CharField(max_length=50, default="manual")
+    technique = serializers.CharField(max_length=200, default="manual", help_text="'+'-joined technique names")
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class OptionLevelsQuerySerializer(serializers.Serializer):
+    underlying = serializers.ChoiceField(choices=["NIFTY", "BANKNIFTY"], default="NIFTY")
+    date = serializers.DateField(required=False, help_text="Trading day; defaults to today")
+
+
+class LiveEquityQuerySerializer(serializers.Serializer):
+    count = serializers.IntegerField(default=5, min_value=1, max_value=20)
+
+
+class LiveOptionsQuerySerializer(serializers.Serializer):
+    underlying = serializers.ChoiceField(choices=["NIFTY", "BANKNIFTY"], default="NIFTY")

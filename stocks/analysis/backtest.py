@@ -70,12 +70,21 @@ def _simulate(dates, px, day, entry, target, stop, hold):
     return window[-1][3] / entry - 1, "time", hold
 
 
-def run(step=STEP, hold=HOLD, progress=None):
-    """Simulated trades as a DataFrame: one row per (date, stock) with a flag per technique."""
+def run(step=STEP, hold=HOLD, progress=None, start_date=None, end_date=None):
+    """Simulated trades as a DataFrame: one row per (date, stock) with a flag per technique.
+
+    `start_date` / `end_date` (dates, optional) limit the signal dates; candles after
+    `end_date` are still used to judge how those trades ended.
+    """
     candles = _load_all_candles()
     future = {sym: (g["date"].to_numpy(), g[["open", "high", "low", "close"]].to_numpy())
               for sym, g in candles.groupby("symbol", observed=True)}
-    days = np.sort(candles["date"].unique())[::step]
+    days = np.sort(candles["date"].unique())
+    if start_date:
+        days = days[days >= np.datetime64(start_date)]
+    if end_date:
+        days = days[days <= np.datetime64(end_date)]
+    days = days[::step]
 
     trades = []
     for n, day in enumerate(days, start=1):
@@ -102,6 +111,9 @@ def run(step=STEP, hold=HOLD, progress=None):
 
 def summarize(trades, step=STEP, hold=HOLD):
     """Per-technique track record, compared with every liquid stock on the same dates."""
+    if trades.empty:
+        raise ValueError("The backtest produced no trades: pick a wider date range "
+                         f"(each trade needs {hold} later sessions to finish)")
     t = trades.copy()
     t["ret_pct"] = t["ret"] * 100
     t["month"] = pd.to_datetime(t["as_of"]).dt.to_period("M")
@@ -141,9 +153,9 @@ def summarize(trades, step=STEP, hold=HOLD):
     }
 
 
-def run_and_save(step=STEP, hold=HOLD, progress=None):
+def run_and_save(step=STEP, hold=HOLD, progress=None, start_date=None, end_date=None):
     started = time.monotonic()
-    summary = summarize(run(step, hold, progress), step, hold)
+    summary = summarize(run(step, hold, progress, start_date, end_date), step, hold)
     summary["runtime_seconds"] = round(time.monotonic() - started)
     path = results_path()
     path.parent.mkdir(parents=True, exist_ok=True)
